@@ -40,9 +40,9 @@ public static class ServiceCollectionExtensions
     /// // Then inject and use:
     /// public class MyService
     /// {
-    ///     private readonly INaturalCronConverter _converter;
+    ///     private readonly IHumanCronConverter _converter;
     ///
-    ///     public MyService(INaturalCronConverter converter)
+    ///     public MyService(IHumanCronConverter converter)
     ///     {
     ///         _converter = converter;
     ///     }
@@ -79,7 +79,7 @@ public static class ServiceCollectionExtensions
         services.AddTransient<IScheduleFormatter, NaturalLanguageFormatter>();
 
         // Register Unix cron converter using factory method (handles IClock and DateTimeZone dependencies)
-        services.AddTransient<INaturalCronConverter>(_ => UnixCronConverter.Create());
+        services.AddTransient<IHumanCronConverter>(_ => UnixCronConverter.Create());
 
         // Auto-discover and register extension services (Quartz, Hangfire, etc.)
         RegisterExtensionServices(services);
@@ -88,7 +88,7 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Scans loaded assemblies for NaturalCron extension packages and invokes their AddServices methods
+    /// Scans loaded assemblies for HumanCron extension packages and invokes their AddServices methods
     /// Each extension package can control its own service lifetimes and registration logic
     /// </summary>
     private static void RegisterExtensionServices(IServiceCollection services)

@@ -12,13 +12,13 @@ namespace HumanCron.Converters.Unix;
 /// Bidirectional converter between natural language and Unix 5-part cron expressions
 /// </summary>
 /// <remarks>
-/// Implements the core INaturalCronConverter interface using:
+/// Implements the core IHumanCronConverter interface using:
 /// - NaturalLanguageParser: text → ScheduleSpec
 /// - UnixCronBuilder: ScheduleSpec → Unix cron
 /// - UnixCronParser: Unix cron → ScheduleSpec
 /// - NaturalLanguageFormatter: ScheduleSpec → text
 /// </remarks>
-public sealed class UnixCronConverter : INaturalCronConverter
+public sealed class UnixCronConverter : IHumanCronConverter
 {
     private readonly IScheduleParser _parser;
     private readonly IScheduleFormatter _formatter;

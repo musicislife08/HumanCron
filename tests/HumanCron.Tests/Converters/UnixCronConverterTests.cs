@@ -14,7 +14,7 @@ namespace HumanCron.Tests.Converters;
 [TestFixture]
 public class UnixCronConverterTests
 {
-    private INaturalCronConverter _converter = null!;
+    private IHumanCronConverter _converter = null!;
 
     [SetUp]
     public void SetUp()
