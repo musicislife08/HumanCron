@@ -28,10 +28,10 @@ dotnet add reference path/to/NaturalCron/NaturalCron.csproj
 ### 2. Register Services
 
 ```csharp
-using NaturalCron;
+using HumanCron;
 
 // In Program.cs or Startup.cs
-services.AddNaturalCron(); // Auto-discovers Quartz extension if installed
+services.AddHumanCron(); // Auto-discovers Quartz extension if installed
 ```
 
 This registers:
@@ -43,10 +43,10 @@ This registers:
 ### Dependency Injection
 
 ```csharp
-using NaturalCron.Abstractions;
-using NaturalCron.Models;
-using NaturalCron.Parsing;
-using NaturalCron.Quartz;
+using HumanCron.Abstractions;
+using HumanCron.Models;
+using HumanCron.Parsing;
+using HumanCron.Quartz;
 using Quartz;
 
 public class MyBackgroundService

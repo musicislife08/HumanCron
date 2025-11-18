@@ -6,7 +6,7 @@ namespace HumanCron.Tests.Helpers;
 
 /// <summary>
 /// Tests for TimeZoneConverter - conversion between NodaTime DateTimeZone and BCL TimeZoneInfo
-/// Required for Quartz.NET interop which uses TimeZoneInfo while NaturalCron uses NodaTime
+/// Required for Quartz.NET interop which uses TimeZoneInfo while HumanCron uses NodaTime
 /// </summary>
 [TestFixture]
 public class TimeZoneConverterTests

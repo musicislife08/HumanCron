@@ -69,7 +69,7 @@ NaturalCron/                                  # Standalone repository
 │   │       └── UnixCronParser.cs             # 5-part cron → ScheduleSpec (internal)
 │   │
 │   └── DependencyInjection/
-│       └── ServiceCollectionExtensions.cs    # AddNaturalCron() for DI registration
+│       └── ServiceCollectionExtensions.cs    # AddHumanCron() for DI registration
 │
 ├── NaturalCron.Quartz/                       # Quartz.NET extension (SEPARATE)
 │   ├── NaturalCron.Quartz.csproj
@@ -107,7 +107,7 @@ NaturalCron/                                  # Standalone repository
 ### INaturalCronConverter (Core Interface)
 
 ```csharp
-namespace NaturalCron.Abstractions;
+namespace HumanCron.Abstractions;
 
 /// <summary>
 /// Bidirectional converter between natural language and Unix 5-part cron expressions
@@ -142,7 +142,7 @@ public interface INaturalCronConverter
 ### ParseResult (Success/Error Result Type)
 
 ```csharp
-namespace NaturalCron.Models;
+namespace HumanCron.Models;
 
 /// <summary>
 /// Result of parsing/conversion operation
@@ -196,7 +196,7 @@ public abstract class ParseResult<T>
 ### IQuartzScheduleConverter (Extension Interface)
 
 ```csharp
-namespace NaturalCron.Quartz.Abstractions;
+namespace HumanCron.Quartz.Abstractions;
 
 /// <summary>
 /// Bidirectional converter between natural language and Quartz.NET schedule builders
@@ -237,7 +237,7 @@ public interface IQuartzScheduleConverter
 ### ScheduleSpec (Internal Parsing Representation)
 
 ```csharp
-namespace NaturalCron.Models.Internal;
+namespace HumanCron.Models.Internal;
 
 /// <summary>
 /// Internal representation of parsed schedule (NOT exposed in public API)
@@ -305,7 +305,7 @@ internal enum DayPattern
 
 ```csharp
 // In Program.cs or Startup.cs
-services.AddNaturalCron();
+services.AddHumanCron();
 
 // In your component or service
 @inject INaturalCronConverter CronConverter
@@ -342,9 +342,9 @@ private void DisplaySchedule(string cronExpression)
 
 ```csharp
 // In Program.cs or Startup.cs
-using NaturalCron; // Single namespace, auto-discovers Quartz extension
+using HumanCron; // Single namespace, auto-discovers Quartz extension
 
-services.AddNaturalCron(); // Registers base + Quartz services automatically
+services.AddHumanCron(); // Registers base + Quartz services automatically
 
 // In QuartzSchedulingSyncService.cs
 @inject IQuartzScheduleConverter QuartzConverter
@@ -392,7 +392,7 @@ private string GetNaturalLanguageFromTrigger(ITrigger trigger)
 ### Single Method Registration (Auto-Discovery Pattern)
 
 ```csharp
-namespace NaturalCron; // Main namespace for discoverability
+namespace HumanCron; // Main namespace for discoverability
 
 public static class ServiceCollectionExtensions
 {
@@ -445,10 +445,10 @@ public static class ServiceCollectionExtensions
 ```
 
 **Benefits**:
-- Single method call (`AddNaturalCron()`) regardless of packages installed
+- Single method call (`AddHumanCron()`) regardless of packages installed
 - Automatic discovery of Quartz extension if NaturalCron.Quartz package is installed
 - Extensible for future packages (Hangfire, NCrontab, etc.)
-- No namespace confusion - always `using NaturalCron;`
+- No namespace confusion - always `using HumanCron;`
 
 ---
 
@@ -524,7 +524,7 @@ public static class ServiceCollectionExtensions
 6. Implement `UnixCronParser` (5-part cron → ScheduleSpec)
 7. Implement `UnixCronConverter` (ties everything together)
 8. Add comprehensive unit tests
-9. Add DI registration (`AddNaturalCron()`)
+9. Add DI registration (`AddHumanCron()`)
 
 ### Phase 2: Quartz Extension
 1. Create `NaturalCron.Quartz.csproj` (.NET Standard 2.0)
@@ -534,7 +534,7 @@ public static class ServiceCollectionExtensions
 5. Implement `QuartzScheduleParser` (IScheduleBuilder → ScheduleSpec)
 6. Implement `QuartzScheduleConverter` (ties everything together)
 7. Add comprehensive unit tests
-8. Extension auto-discovered via assembly scanning in `AddNaturalCron()`
+8. Extension auto-discovered via assembly scanning in `AddHumanCron()`
 
 ### Phase 3: Production Integration Example
 1. Install `NaturalCron` from NuGet

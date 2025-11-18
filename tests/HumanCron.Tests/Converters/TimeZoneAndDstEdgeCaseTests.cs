@@ -7,7 +7,7 @@ using NodaTime.Testing;
 namespace HumanCron.Tests.Converters;
 
 /// <summary>
-/// Comprehensive DST and timezone edge case tests for NaturalCron
+/// Comprehensive DST and timezone edge case tests for HumanCron
 ///
 /// Testing Strategy:
 /// - Focus on real-world scheduling failures (jobs skipped, running twice, wrong time)
