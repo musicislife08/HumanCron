@@ -14,7 +14,12 @@
   <ItemGroup>
     <!-- Reference core HumanCron library -->
     <PackageReference Include="NodaTime" Version="3.2.2" />
-    <ProjectReference Include="..\HumanCron\HumanCron.csproj" />
+
+    <!-- HumanCron dependency with EXACT version match for synchronized releases -->
+    <!-- Use ProjectReference for local development, PackageReference with exact version for NuGet -->
+    <ProjectReference Include="..\HumanCron\HumanCron.csproj" PrivateAssets="All" />
+    <PackageReference Include="HumanCron" Version="[$(Version)]" />
+    <!-- Brackets [x.y.z] mean "exactly this version only" in NuGet version ranges -->
 
     <!-- Quartz.NET dependency -->
     <PackageReference Include="Quartz" Version="3.15.1" />
