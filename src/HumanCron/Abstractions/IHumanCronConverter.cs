@@ -17,7 +17,7 @@ namespace HumanCron.Abstractions;
 ///
 /// Unix 5-part cron format: minute hour day month dayOfWeek
 /// </remarks>
-public interface INaturalCronConverter
+public interface IHumanCronConverter
 {
     /// <summary>
     /// Convert natural language to Unix 5-part cron expression

@@ -439,7 +439,7 @@ public class ScheduleBuilderTests
     // (Validates fluent builder → converter → fluent builder round-trip)
     // ========================================
 
-    private INaturalCronConverter? _converter;
+    private IHumanCronConverter? _converter;
 
     [SetUp]
     public void SetUp()

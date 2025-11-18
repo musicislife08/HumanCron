@@ -13,36 +13,36 @@ using NodaTime;
 namespace HumanCron;
 
 /// <summary>
-/// Extension methods for registering NaturalCron services with dependency injection
+/// Extension methods for registering HumanCron services with dependency injection
 /// </summary>
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Adds NaturalCron services to the dependency injection container.
+    /// Adds HumanCron services to the dependency injection container.
     /// Automatically discovers and registers extension packages (Quartz.NET, Hangfire, etc.)
     /// </summary>
     /// <param name="services">The service collection to add services to</param>
     /// <returns>The service collection for chaining</returns>
     /// <remarks>
-    /// This method automatically detects installed NaturalCron extension packages:
+    /// This method automatically detects installed HumanCron extension packages:
     /// - Base: Registers Unix 5-part cron converter (industry standard)
-    /// - NaturalCron.Quartz: Auto-registers Quartz.NET converter (if package installed)
+    /// - HumanCron.Quartz: Auto-registers Quartz.NET converter (if package installed)
     ///
-    /// No additional configuration needed - just install the package and call AddNaturalCron()
+    /// No additional configuration needed - just install the package and call AddHumanCron()
     /// </remarks>
     /// <example>
     /// <code>
     /// // Works with base package only OR with Quartz extension installed
     /// using HumanCron;
     ///
-    /// services.AddNaturalCron();
+    /// services.AddHumanCron();
     ///
     /// // Then inject and use:
     /// public class MyService
     /// {
-    ///     private readonly INaturalCronConverter _converter;
+    ///     private readonly IHumanCronConverter _converter;
     ///
-    ///     public MyService(INaturalCronConverter converter)
+    ///     public MyService(IHumanCronConverter converter)
     ///     {
     ///         _converter = converter;
     ///     }
@@ -66,7 +66,7 @@ public static class ServiceCollectionExtensions
     /// }
     /// </code>
     /// </example>
-    public static IServiceCollection AddNaturalCron(this IServiceCollection services)
+    public static IServiceCollection AddHumanCron(this IServiceCollection services)
     {
         // Register NodaTime dependencies if not already registered
         // TryAddSingleton allows users to override with custom implementations
@@ -79,7 +79,7 @@ public static class ServiceCollectionExtensions
         services.AddTransient<IScheduleFormatter, NaturalLanguageFormatter>();
 
         // Register Unix cron converter using factory method (handles IClock and DateTimeZone dependencies)
-        services.AddTransient<INaturalCronConverter>(_ => UnixCronConverter.Create());
+        services.AddTransient<IHumanCronConverter>(_ => UnixCronConverter.Create());
 
         // Auto-discover and register extension services (Quartz, Hangfire, etc.)
         RegisterExtensionServices(services);
@@ -88,7 +88,7 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Scans loaded assemblies for NaturalCron extension packages and invokes their AddServices methods
+    /// Scans loaded assemblies for HumanCron extension packages and invokes their AddServices methods
     /// Each extension package can control its own service lifetimes and registration logic
     /// </summary>
     private static void RegisterExtensionServices(IServiceCollection services)

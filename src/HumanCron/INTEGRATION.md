@@ -1,8 +1,8 @@
-# NaturalCron Integration Guide
+# HumanCron Integration Guide
 
 ## Overview
 
-NaturalCron is a natural language schedule parser with Quartz.NET integration. It converts human-readable schedule descriptions like "every 2 weeks on sunday at 2pm" into Quartz triggers.
+HumanCron is a natural language schedule parser with Quartz.NET integration. It converts human-readable schedule descriptions like "every 2 weeks on sunday at 2pm" into Quartz triggers.
 
 ## Features
 
@@ -19,19 +19,23 @@ NaturalCron is a natural language schedule parser with Quartz.NET integration. I
 
 ## Installation
 
-### 1. Add Project Reference
+### 1. Install NuGet Package
 
 ```bash
-dotnet add reference path/to/NaturalCron/NaturalCron.csproj
+# Core library (Unix cron support)
+dotnet add package HumanCron
+
+# Quartz.NET integration (optional)
+dotnet add package HumanCron.Quartz
 ```
 
 ### 2. Register Services
 
 ```csharp
-using NaturalCron;
+using HumanCron;
 
 // In Program.cs or Startup.cs
-services.AddNaturalCron(); // Auto-discovers Quartz extension if installed
+services.AddHumanCron(); // Auto-discovers Quartz extension if installed
 ```
 
 This registers:
@@ -43,10 +47,10 @@ This registers:
 ### Dependency Injection
 
 ```csharp
-using NaturalCron.Abstractions;
-using NaturalCron.Models;
-using NaturalCron.Parsing;
-using NaturalCron.Quartz;
+using HumanCron.Abstractions;
+using HumanCron.Models;
+using HumanCron.Parsing;
+using HumanCron.Quartz;
 using Quartz;
 
 public class MyBackgroundService
@@ -175,7 +179,7 @@ var result = _parser.Parse("every day at 9am", options);
 // Schedule fires at 9am Eastern Time, converted to server timezone
 ```
 
-**Important**: NaturalCron uses **NodaTime** for timezone handling, not BCL `TimeZoneInfo`. Use `DateTimeZoneProviders.Tzdb[id]` to get timezone instances.
+**Important**: HumanCron uses **NodaTime** for timezone handling, not BCL `TimeZoneInfo`. Use `DateTimeZoneProviders.Tzdb[id]` to get timezone instances.
 
 ### Timezone Conversion Examples
 
@@ -366,7 +370,7 @@ services.AddQuartz(q =>
     // Add your jobs
     q.AddJob<MyJob>(opts => opts.WithIdentity("my-job"));
 
-    // Use NaturalCron to create trigger
+    // Use HumanCron to create trigger
     q.AddTrigger(opts =>
     {
         var parser = serviceProvider.GetRequiredService<IScheduleParser>();

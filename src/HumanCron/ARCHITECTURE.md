@@ -1,4 +1,4 @@
-# NaturalCron - Architecture & Implementation Plan (v2)
+# HumanCron - Architecture & Implementation Plan (v2)
 
 **Date:** 2025-11-14 (Revised)
 **Author:** Kass Eisenmenger
@@ -38,17 +38,17 @@ Users don't want to learn domain models - they want: **"give me a string, get ba
 ## Project Structure
 
 ```
-NaturalCron/                                  # Standalone repository
-├── NaturalCron.slnx
+HumanCron/                                  # Standalone repository
+├── HumanCron.slnx
 ├── .github/workflows/
 │   ├── build-and-test.yml
 │   └── publish-nuget.yml
 ├── src/
-│   ├── NaturalCron/                          # Core library (Unix 5-part cron)
-│   │   ├── NaturalCron.csproj
+│   ├── HumanCron/                          # Core library (Unix 5-part cron)
+│   │   ├── HumanCron.csproj
 │   │   │
 │   │   ├── Abstractions/
-│   │   └── INaturalCronConverter.cs          # String → String conversion
+│   │   └── IHumanCronConverter.cs          # String → String conversion
 │   │
 │   ├── Models/
 │   │   ├── ParseResult.cs                    # Result<string> for conversions
@@ -64,15 +64,15 @@ NaturalCron/                                  # Standalone repository
 │   │
 │   ├── Converters/
 │   │   └── Unix/
-│   │       ├── UnixCronConverter.cs          # Implements INaturalCronConverter
+│   │       ├── UnixCronConverter.cs          # Implements IHumanCronConverter
 │   │       ├── UnixCronBuilder.cs            # ScheduleSpec → 5-part cron (internal)
 │   │       └── UnixCronParser.cs             # 5-part cron → ScheduleSpec (internal)
 │   │
 │   └── DependencyInjection/
-│       └── ServiceCollectionExtensions.cs    # AddNaturalCron() for DI registration
+│       └── ServiceCollectionExtensions.cs    # AddHumanCron() for DI registration
 │
-├── NaturalCron.Quartz/                       # Quartz.NET extension (SEPARATE)
-│   ├── NaturalCron.Quartz.csproj
+├── HumanCron.Quartz/                       # Quartz.NET extension (SEPARATE)
+│   ├── HumanCron.Quartz.csproj
 │   │
 │   ├── Abstractions/
 │   │   └── IQuartzScheduleConverter.cs       # String ↔ IScheduleBuilder
@@ -88,8 +88,8 @@ NaturalCron/                                  # Standalone repository
 │   └── Extensions/
 │       └── ScheduleBuilderExtensions.cs      # Fluent builder → Quartz schedules
 │
-└── NaturalCron.Tests/                        # Test project
-    ├── NaturalCron.Tests.csproj
+└── HumanCron.Tests/                        # Test project
+    ├── HumanCron.Tests.csproj
     │
     ├── Core/
     │   ├── UnixCronConverterTests.cs
@@ -104,10 +104,10 @@ NaturalCron/                                  # Standalone repository
 
 ## Core API (String-to-String)
 
-### INaturalCronConverter (Core Interface)
+### IHumanCronConverter (Core Interface)
 
 ```csharp
-namespace NaturalCron.Abstractions;
+namespace HumanCron.Abstractions;
 
 /// <summary>
 /// Bidirectional converter between natural language and Unix 5-part cron expressions
@@ -121,7 +121,7 @@ namespace NaturalCron.Abstractions;
 /// - "every 30 minutes" → "*/30 * * * *"
 /// - "every sunday at 3am" → "0 3 * * 0"
 /// </remarks>
-public interface INaturalCronConverter
+public interface IHumanCronConverter
 {
     /// <summary>
     /// Convert natural language to Unix 5-part cron expression
@@ -142,7 +142,7 @@ public interface INaturalCronConverter
 ### ParseResult (Success/Error Result Type)
 
 ```csharp
-namespace NaturalCron.Models;
+namespace HumanCron.Models;
 
 /// <summary>
 /// Result of parsing/conversion operation
@@ -196,7 +196,7 @@ public abstract class ParseResult<T>
 ### IQuartzScheduleConverter (Extension Interface)
 
 ```csharp
-namespace NaturalCron.Quartz.Abstractions;
+namespace HumanCron.Quartz.Abstractions;
 
 /// <summary>
 /// Bidirectional converter between natural language and Quartz.NET schedule builders
@@ -237,7 +237,7 @@ public interface IQuartzScheduleConverter
 ### ScheduleSpec (Internal Parsing Representation)
 
 ```csharp
-namespace NaturalCron.Models.Internal;
+namespace HumanCron.Models.Internal;
 
 /// <summary>
 /// Internal representation of parsed schedule (NOT exposed in public API)
@@ -305,10 +305,10 @@ internal enum DayPattern
 
 ```csharp
 // In Program.cs or Startup.cs
-services.AddNaturalCron();
+services.AddHumanCron();
 
 // In your component or service
-@inject INaturalCronConverter CronConverter
+@inject IHumanCronConverter CronConverter
 
 private void OnScheduleChanged(string naturalLanguage)
 {
@@ -342,9 +342,9 @@ private void DisplaySchedule(string cronExpression)
 
 ```csharp
 // In Program.cs or Startup.cs
-using NaturalCron; // Single namespace, auto-discovers Quartz extension
+using HumanCron; // Single namespace, auto-discovers Quartz extension
 
-services.AddNaturalCron(); // Registers base + Quartz services automatically
+services.AddHumanCron(); // Registers base + Quartz services automatically
 
 // In QuartzSchedulingSyncService.cs
 @inject IQuartzScheduleConverter QuartzConverter
@@ -392,14 +392,14 @@ private string GetNaturalLanguageFromTrigger(ITrigger trigger)
 ### Single Method Registration (Auto-Discovery Pattern)
 
 ```csharp
-namespace NaturalCron; // Main namespace for discoverability
+namespace HumanCron; // Main namespace for discoverability
 
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Register NaturalCron services (base + auto-discovered extensions)
+    /// Register HumanCron services (base + auto-discovered extensions)
     /// </summary>
-    public static IServiceCollection AddNaturalCron(this IServiceCollection services)
+    public static IServiceCollection AddHumanCron(this IServiceCollection services)
     {
         // Register NodaTime dependencies
         services.TryAddSingleton<IClock>(SystemClock.Instance);
@@ -409,7 +409,7 @@ public static class ServiceCollectionExtensions
         // Register base services
         services.AddTransient<IScheduleParser, NaturalLanguageParser>();
         services.AddTransient<IScheduleFormatter, NaturalLanguageFormatter>();
-        services.AddTransient<INaturalCronConverter, UnixCronConverter>();
+        services.AddTransient<IHumanCronConverter, UnixCronConverter>();
 
         // Auto-discover extension packages (Quartz, Hangfire, etc.)
         RegisterExtensionServices(services);
@@ -419,10 +419,10 @@ public static class ServiceCollectionExtensions
 
     private static void RegisterExtensionServices(IServiceCollection services)
     {
-        // Scan for NaturalCron.* extension assemblies
+        // Scan for HumanCron.* extension assemblies
         var assemblies = AppDomain.CurrentDomain.GetAssemblies()
-            .Where(assembly => assembly.GetName().Name?.StartsWith("NaturalCron.") is true
-                            && assembly.GetName().Name != "NaturalCron");
+            .Where(assembly => assembly.GetName().Name?.StartsWith("HumanCron.") is true
+                            && assembly.GetName().Name != "HumanCron");
 
         foreach (var assembly in assemblies)
         {
@@ -445,16 +445,16 @@ public static class ServiceCollectionExtensions
 ```
 
 **Benefits**:
-- Single method call (`AddNaturalCron()`) regardless of packages installed
-- Automatic discovery of Quartz extension if NaturalCron.Quartz package is installed
+- Single method call (`AddHumanCron()`) regardless of packages installed
+- Automatic discovery of Quartz extension if HumanCron.Quartz package is installed
 - Extensible for future packages (Hangfire, NCrontab, etc.)
-- No namespace confusion - always `using NaturalCron;`
+- No namespace confusion - always `using HumanCron;`
 
 ---
 
 ## NuGet Dependencies
 
-### NaturalCron.csproj (Core)
+### HumanCron.csproj (Core)
 
 ```xml
 <ItemGroup>
@@ -466,19 +466,19 @@ public static class ServiceCollectionExtensions
 </ItemGroup>
 ```
 
-### NaturalCron.Quartz.csproj (Extension)
+### HumanCron.Quartz.csproj (Extension)
 
 ```xml
 <ItemGroup>
   <!-- Reference core library -->
-  <ProjectReference Include="..\NaturalCron\NaturalCron.csproj" />
+  <ProjectReference Include="..\HumanCron\HumanCron.csproj" />
 
   <!-- Quartz.NET dependency -->
   <PackageReference Include="Quartz" Version="3.15.1" />
 </ItemGroup>
 ```
 
-### NaturalCron.Tests.csproj
+### HumanCron.Tests.csproj
 
 ```xml
 <ItemGroup>
@@ -516,31 +516,31 @@ public static class ServiceCollectionExtensions
 ## Implementation Phases
 
 ### Phase 1: Core Library (Unix Cron)
-1. Create `NaturalCron.csproj` (.NET Standard 2.0)
-2. Implement `INaturalCronConverter` interface
+1. Create `HumanCron.csproj` (.NET Standard 2.0)
+2. Implement `IHumanCronConverter` interface
 3. Create internal `ScheduleSpec` model
 4. Implement `NaturalLanguageParser` (text → ScheduleSpec)
 5. Implement `UnixCronBuilder` (ScheduleSpec → 5-part cron)
 6. Implement `UnixCronParser` (5-part cron → ScheduleSpec)
 7. Implement `UnixCronConverter` (ties everything together)
 8. Add comprehensive unit tests
-9. Add DI registration (`AddNaturalCron()`)
+9. Add DI registration (`AddHumanCron()`)
 
 ### Phase 2: Quartz Extension
-1. Create `NaturalCron.Quartz.csproj` (.NET Standard 2.0)
+1. Create `HumanCron.Quartz.csproj` (.NET Standard 2.0)
 2. Implement `IQuartzScheduleConverter` interface
 3. Implement `QuartzCronBuilder` (ScheduleSpec → CronScheduleBuilder)
 4. Implement `QuartzCalendarBuilder` (ScheduleSpec → CalendarIntervalScheduleBuilder)
 5. Implement `QuartzScheduleParser` (IScheduleBuilder → ScheduleSpec)
 6. Implement `QuartzScheduleConverter` (ties everything together)
 7. Add comprehensive unit tests
-8. Extension auto-discovered via assembly scanning in `AddNaturalCron()`
+8. Extension auto-discovered via assembly scanning in `AddHumanCron()`
 
 ### Phase 3: Production Integration Example
-1. Install `NaturalCron` from NuGet
-2. Install `NaturalCron.Quartz` for Quartz.NET integration
+1. Install `HumanCron` from NuGet
+2. Install `HumanCron.Quartz` for Quartz.NET integration
 3. Update scheduling service to use `IQuartzScheduleConverter`
-4. Update `BackgroundJobs.razor` to use `INaturalCronConverter`
+4. Update `BackgroundJobs.razor` to use `IHumanCronConverter`
 5. Test in production use case
 
 **Total Estimated Effort:** 12-18 hours
@@ -558,8 +558,8 @@ public static class ServiceCollectionExtensions
 - ✅ Works in production (BackgroundJobs.razor + QuartzSchedulingSyncService)
 
 ### v1.0.0 (Standalone NuGet Packages)
-- ✅ `NaturalCron` package (core Unix cron support)
-- ✅ `NaturalCron.Quartz` package (optional Quartz extension)
+- ✅ `HumanCron` package (core Unix cron support)
+- ✅ `HumanCron.Quartz` package (optional Quartz extension)
 - ✅ Extracted to separate repo
 - ✅ Comprehensive README with examples
 - ✅ Published to NuGet.org

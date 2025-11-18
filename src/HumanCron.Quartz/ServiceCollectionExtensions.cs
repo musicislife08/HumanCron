@@ -4,16 +4,16 @@ using HumanCron.Quartz.Abstractions;
 namespace HumanCron.Quartz;
 
 /// <summary>
-/// Dependency injection registration for NaturalCron.Quartz extension
+/// Dependency injection registration for HumanCron.Quartz extension
 /// </summary>
 /// <remarks>
-/// DO NOT call AddServices() directly - it is automatically invoked by NaturalCron.AddNaturalCron()
+/// DO NOT call AddServices() directly - it is automatically invoked by HumanCron.AddHumanCron()
 /// assembly scanning when this package is installed.
 /// </remarks>
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Internal registration method invoked by NaturalCron.AddNaturalCron() assembly scanning
+    /// Internal registration method invoked by HumanCron.AddHumanCron() assembly scanning
     /// Registers Quartz.NET converter services
     /// </summary>
     /// <param name="services">The service collection</param>

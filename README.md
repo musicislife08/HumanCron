@@ -63,14 +63,14 @@ var reverseResult = converter.ToNaturalLanguage("0 14 * * *");
 using HumanCron;
 
 // In Program.cs or Startup.cs
-builder.Services.AddNaturalCron();
+builder.Services.AddHumanCron();
 
 // In your service
 public class MySchedulingService
 {
-    private readonly INaturalCronConverter _converter;
+    private readonly IHumanCronConverter _converter;
 
-    public MySchedulingService(INaturalCronConverter converter)
+    public MySchedulingService(IHumanCronConverter converter)
     {
         _converter = converter;
     }

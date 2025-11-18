@@ -16,7 +16,7 @@ namespace HumanCron.Quartz;
 /// - SystemClock.Instance for time operations
 /// - System default timezone via DateTimeZoneProviders.Tzdb
 ///
-/// For production use with DI, use AddNaturalCron() instead which automatically
+/// For production use with DI, use AddHumanCron() instead which automatically
 /// discovers and registers this extension package.
 /// </remarks>
 /// <example>
