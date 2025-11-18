@@ -1,0 +1,51 @@
+# Build outputs
+bin/
+obj/
+/packages/
+
+# Temporary working files
+tmp/
+
+# IDE files
+.DS_Store
+*.DotSettings.user
+riderModule.iml
+.idea/
+.vs/
+.vscode/
+
+# User-specific files
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Test results
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+*.trx
+*.coverage
+
+# NuGet packages
+*.nupkg
+*.snupkg
+!.nuget/packages/
+
+# === SECURITY: Never commit sensitive files ===
+**/Properties/launchSettings.json
+launchSettings.json
+**/secrets.json
+http-client.private.env.json
+**/http-client.private*.json
+**/*.http
+appsettings.Development.json
+appsettings.Local.json
+appsettings.*.local.json
+.env
+.env.local
+.env.*.local
+!.env.example
+**/*.pfx
+**/*.p12
+**/*.key

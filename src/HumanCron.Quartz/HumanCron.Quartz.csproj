@@ -1,0 +1,26 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <PackageId>HumanCron.Quartz</PackageId>
+    <Description>Quartz.NET integration for HumanCron. Convert natural language schedules like "every 2 weeks on sunday at 2pm" directly to Quartz IScheduleBuilder with automatic timezone handling, DST support, and start time calculation for CalendarInterval schedules. Includes bidirectional conversion (schedule to natural language). Requires exact version match with HumanCron core package.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Expose internal types to test project -->
+    <InternalsVisibleTo Include="HumanCron.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Reference core HumanCron library -->
+    <PackageReference Include="NodaTime" Version="3.2.2" />
+    <ProjectReference Include="..\HumanCron\HumanCron.csproj" />
+
+    <!-- Quartz.NET dependency -->
+    <PackageReference Include="Quartz" Version="3.15.1" />
+
+    <!-- DI abstractions for extension registration -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.0" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,55 @@
+name: Publish to NuGet
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '10.0.x'
+
+    - name: Validate version matches tag
+      run: |
+        # Extract version from git tag (e.g., v0.1.0 -> 0.1.0)
+        # GITHUB_REF is safe - it's a controlled GitHub environment variable, not user input
+        TAG_VERSION=${GITHUB_REF#refs/tags/v}
+        echo "Git tag version: $TAG_VERSION"
+
+        # Extract version from Directory.Build.props
+        PROPS_VERSION=$(grep '<Version>' Directory.Build.props | sed 's/.*<Version>\(.*\)<\/Version>.*/\1/' | tr -d '[:space:]')
+        echo "Directory.Build.props version: $PROPS_VERSION"
+
+        # Validate they match
+        if [ "$TAG_VERSION" != "$PROPS_VERSION" ]; then
+          echo "❌ ERROR: Git tag version ($TAG_VERSION) doesn't match Directory.Build.props ($PROPS_VERSION)"
+          echo "Please update Directory.Build.props to match the git tag before releasing."
+          exit 1
+        fi
+
+        echo "✅ Version validation passed: $TAG_VERSION"
+
+    - name: Restore dependencies
+      run: dotnet restore
+
+    - name: Build
+      run: dotnet build --no-restore --configuration Release
+
+    - name: Pack HumanCron
+      run: dotnet pack src/HumanCron/HumanCron.csproj --no-build --configuration Release --output ./nupkgs
+
+    - name: Pack HumanCron.Quartz
+      run: dotnet pack src/HumanCron.Quartz/HumanCron.Quartz.csproj --no-build --configuration Release --output ./nupkgs
+
+    - name: Push to NuGet.org
+      env:
+        NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+      run: dotnet nuget push ./nupkgs/*.nupkg --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate

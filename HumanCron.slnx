@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/HumanCron.Quartz/HumanCron.Quartz.csproj" />
+    <Project Path="src/HumanCron/HumanCron.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/HumanCron.Tests/HumanCron.Tests.csproj" />
+  </Folder>
+</Solution>

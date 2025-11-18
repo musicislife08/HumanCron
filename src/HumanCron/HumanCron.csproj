@@ -1,0 +1,22 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <PackageId>HumanCron</PackageId>
+    <Description>Human-readable cron expression converter with bidirectional support and timezone awareness. Parse schedules like "every 30 minutes", "every day at 2pm", or "every monday at 9am" into Unix cron expressions and convert back to natural language. Features zero-allocation Span&lt;T&gt; parsing, NodaTime timezone handling with DST support, and comprehensive month selection (single months, ranges, lists).</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Expose internal types to Quartz extension -->
+    <InternalsVisibleTo Include="HumanCron.Quartz" />
+    <!-- Expose internal types to test project -->
+    <InternalsVisibleTo Include="HumanCron.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Cronos" Version="0.8.4" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.0" />
+    <PackageReference Include="NodaTime" Version="3.2.2" />
+  </ItemGroup>
+
+</Project>

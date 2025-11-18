@@ -1,0 +1,185 @@
+using HumanCron.Models;
+using HumanCron.Models.Internal;
+using HumanCron.Abstractions;
+using HumanCron.Quartz.Abstractions;
+using Quartz;
+using System;
+using NodaTime;
+
+namespace HumanCron.Quartz.Converters;
+
+/// <summary>
+/// Converts between natural language and Quartz.NET schedules
+/// Provides bidirectional conversion: natural language ↔ Quartz IScheduleBuilder
+/// </summary>
+public sealed class QuartzScheduleConverter : IQuartzScheduleConverter
+{
+    private readonly IScheduleParser _parser;
+    private readonly IScheduleFormatter _formatter;
+    private readonly QuartzScheduleBuilder _quartzBuilder;
+    private readonly QuartzScheduleParser _quartzParser;
+    private readonly DateTimeZone _localTimeZone;
+
+    /// <summary>
+    /// Internal constructor for dependency injection (tests only)
+    /// </summary>
+    /// <param name="parser">Natural language parser</param>
+    /// <param name="formatter">Natural language formatter</param>
+    /// <param name="clock">Clock for date/time operations (SystemClock.Instance in production, FakeClock in tests)</param>
+    /// <param name="localTimeZone">Server's local timezone (GetSystemDefault() in production, explicit timezone in tests)</param>
+    internal QuartzScheduleConverter(IScheduleParser parser, IScheduleFormatter formatter, IClock clock, DateTimeZone localTimeZone)
+    {
+        _parser = parser ?? throw new ArgumentNullException(nameof(parser));
+        _formatter = formatter ?? throw new ArgumentNullException(nameof(formatter));
+        _localTimeZone = localTimeZone ?? throw new ArgumentNullException(nameof(localTimeZone));
+        _quartzBuilder = new QuartzScheduleBuilder(clock ?? throw new ArgumentNullException(nameof(clock)));
+        _quartzParser = new QuartzScheduleParser();
+    }
+
+    public ParseResult<IScheduleBuilder> ToQuartzSchedule(string naturalLanguage)
+    {
+        return ToQuartzSchedule(naturalLanguage, null);
+    }
+
+    /// <summary>
+    /// Convert natural language to Quartz.NET schedule with timezone support (internal for testing)
+    /// </summary>
+    /// <param name="naturalLanguage">Natural language schedule (e.g., "1d at 2pm")</param>
+    /// <param name="userTimezone">
+    /// User's timezone for interpreting times (null = use system default timezone)
+    /// Quartz stores timezone metadata, so DST changes are handled automatically
+    /// Use IANA timezone IDs (e.g., DateTimeZoneProviders.Tzdb["America/New_York"])
+    /// </param>
+    /// <returns>ParseResult containing Quartz IScheduleBuilder or error</returns>
+    /// <remarks>
+    /// Unlike Unix cron, Quartz schedules preserve timezone information via .InTimeZone().
+    /// This means DST transitions are handled automatically at runtime.
+    ///
+    /// Examples:
+    /// - Default: ToQuartzSchedule("1d at 2pm") → 2pm in system timezone
+    /// - Explicit: ToQuartzSchedule("1d at 2pm", EST) → 2pm EST (handles DST automatically)
+    /// </remarks>
+    internal ParseResult<IScheduleBuilder> ToQuartzSchedule(string naturalLanguage, DateTimeZone? userTimezone)
+    {
+        if (string.IsNullOrWhiteSpace(naturalLanguage))
+        {
+            return new ParseResult<IScheduleBuilder>.Error("Natural language input cannot be empty");
+        }
+
+        // Use provided timezone or default to server's local timezone
+        var options = new Parsing.ScheduleParserOptions
+        {
+            TimeZone = userTimezone ?? _localTimeZone
+        };
+
+        // Step 1: Parse natural language to ScheduleSpec
+        var parseResult = _parser.Parse(naturalLanguage, options);
+        if (parseResult is not ParseResult<ScheduleSpec>.Success success)
+        {
+            var error = (ParseResult<ScheduleSpec>.Error)parseResult;
+            return new ParseResult<IScheduleBuilder>.Error(error.Message);
+        }
+
+        var spec = success.Value;
+
+        // Step 2: Build Quartz schedule from ScheduleSpec
+        try
+        {
+            var scheduleBuilder = _quartzBuilder.Build(spec);
+            return new ParseResult<IScheduleBuilder>.Success(scheduleBuilder);
+        }
+        catch (Exception ex)
+        {
+            return new ParseResult<IScheduleBuilder>.Error($"Failed to build Quartz schedule: {ex.Message}");
+        }
+    }
+
+    public ParseResult<string> ToNaturalLanguage(IScheduleBuilder? scheduleBuilder)
+    {
+        if (scheduleBuilder == null)
+        {
+            return new ParseResult<string>.Error("Schedule builder cannot be null");
+        }
+
+        // Step 1: Parse Quartz schedule to ScheduleSpec
+        var parseResult = _quartzParser.ParseScheduleBuilder(scheduleBuilder);
+        if (parseResult is not ParseResult<ScheduleSpec>.Success success)
+        {
+            var error = (ParseResult<ScheduleSpec>.Error)parseResult;
+            return new ParseResult<string>.Error(error.Message);
+        }
+
+        var spec = success.Value;
+
+        // Step 2: Format ScheduleSpec to natural language
+        var naturalLanguage = _formatter.Format(spec);
+        return new ParseResult<string>.Success(naturalLanguage);
+    }
+
+    /// <summary>
+    /// Calculate the appropriate start time for a schedule with constraints
+    /// </summary>
+    /// <param name="naturalLanguage">Natural language schedule (e.g., "2w on sunday at 2pm")</param>
+    /// <param name="referenceTime">Optional reference time (defaults to UTC now)</param>
+    /// <param name="userTimezone">User's timezone for interpreting times (null = use Local timezone)</param>
+    /// <returns>The calculated start time, or null if no special start time is needed</returns>
+    internal ParseResult<DateTimeOffset?> CalculateStartTime(
+        string naturalLanguage,
+        DateTimeOffset? referenceTime = null,
+        DateTimeZone? userTimezone = null)
+    {
+        var options = new Parsing.ScheduleParserOptions
+        {
+            TimeZone = userTimezone ?? _localTimeZone
+        };
+
+        var parseResult = _parser.Parse(naturalLanguage, options);
+        if (parseResult is not ParseResult<ScheduleSpec>.Success success)
+        {
+            var error = (ParseResult<ScheduleSpec>.Error)parseResult;
+            return new ParseResult<DateTimeOffset?>.Error(error.Message);
+        }
+
+        var spec = success.Value;
+        var startTime = _quartzBuilder.CalculateStartTime(spec, referenceTime);
+        return new ParseResult<DateTimeOffset?>.Success(startTime);
+    }
+
+    public ParseResult<TriggerBuilder> CreateTriggerBuilder(string naturalLanguage)
+    {
+        if (string.IsNullOrWhiteSpace(naturalLanguage))
+        {
+            return new ParseResult<TriggerBuilder>.Error("Natural language input cannot be empty");
+        }
+
+        // Get the schedule builder
+        var scheduleResult = ToQuartzSchedule(naturalLanguage);
+        if (scheduleResult is not ParseResult<IScheduleBuilder>.Success scheduleSuccess)
+        {
+            var error = (ParseResult<IScheduleBuilder>.Error)scheduleResult;
+            return new ParseResult<TriggerBuilder>.Error(error.Message);
+        }
+
+        // Calculate start time (null if not needed)
+        var startTimeResult = CalculateStartTime(naturalLanguage);
+        if (startTimeResult is not ParseResult<DateTimeOffset?>.Success startSuccess)
+        {
+            var error = (ParseResult<DateTimeOffset?>.Error)startTimeResult;
+            return new ParseResult<TriggerBuilder>.Error(error.Message);
+        }
+
+        // Create TriggerBuilder with schedule and optional start time
+        var triggerBuilder = TriggerBuilder.Create()
+            .WithSchedule(scheduleSuccess.Value);
+
+        // Set start time if calculated (for CalendarInterval schedules with constraints)
+        if (startSuccess.Value.HasValue)
+        {
+            // Explicitly convert to UTC to ensure Quartz interprets it correctly
+            var startTimeUtc = startSuccess.Value.Value.ToUniversalTime();
+            triggerBuilder.StartAt(startTimeUtc);
+        }
+
+        return new ParseResult<TriggerBuilder>.Success(triggerBuilder);
+    }
+}

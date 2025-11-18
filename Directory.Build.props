@@ -1,0 +1,33 @@
+<Project>
+  <PropertyGroup>
+    <!-- Shared package metadata -->
+    <Authors>Kass Eisenmenger</Authors>
+    <Company>Kass Eisenmenger</Company>
+    <Copyright>Copyright © 2025 Kass Eisenmenger</Copyright>
+    <RepositoryUrl>https://github.com/musicislife08/HumanCron</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageProjectUrl>https://github.com/musicislife08/HumanCron</PackageProjectUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageTags>cron;scheduling;human-readable;natural-language;parser;quartz;bidirectional;timezone;nodatime;dotnet;csharp</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+
+    <!-- Version - Single source of truth for synchronized releases -->
+    <Version>0.1.0</Version>
+
+    <!-- Build configuration -->
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+
+    <!-- Source link for debugging -->
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Include README in all packages -->
+    <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="\" Condition="'$(IsPackable)' != 'false'" />
+  </ItemGroup>
+</Project>
