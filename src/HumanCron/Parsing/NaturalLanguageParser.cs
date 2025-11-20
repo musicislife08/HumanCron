@@ -527,56 +527,16 @@ internal sealed partial class NaturalLanguageParser : IScheduleParser
             }
         }
 
-        // Extract time (optional): "at 2pm", "at 14:00", "at 3:30am"
-        TimeOnly? timeOfDay = null;
-        var timeMatch = TimePattern().Match(input);
-        if (timeMatch.Success)
+        // Extract time constraints (optional) - REFACTORED
+        // Parse time constraints using extracted method for better maintainability
+        var timeConstraintResult = TryParseTimeConstraints(input);
+        if (timeConstraintResult is ParseResult<TimeConstraints>.Error timeError)
         {
-            var hour = int.Parse(timeMatch.Groups[1].ValueSpan);
-            var minute = timeMatch.Groups[2].Success ? int.Parse(timeMatch.Groups[2].ValueSpan) : 0;
-            var amPm = timeMatch.Groups[3].Success ? timeMatch.Groups[3].Value : null;
-
-            // Validate hour before conversion
-            if (amPm != null)
-            {
-                // 12-hour format: hour must be 1-12
-                if (hour < 1 || hour > 12)
-                {
-                    return new ParseResult<ScheduleSpec>.Error($"Invalid hour for 12-hour format: {hour} (must be 1-12)");
-                }
-            }
-            else
-            {
-                // 24-hour format: hour must be 0-23
-                if (hour < 0 || hour > 23)
-                {
-                    return new ParseResult<ScheduleSpec>.Error($"Invalid hour for 24-hour format: {hour} (must be 0-23)");
-                }
-            }
-
-            // Validate minutes
-            if (minute < 0 || minute > 59)
-            {
-                return new ParseResult<ScheduleSpec>.Error($"Invalid minutes: {minute} (must be 0-59)");
-            }
-
-            // Convert 12-hour to 24-hour if am/pm specified
-            if (amPm != null)
-            {
-                if (string.Equals(amPm, "am", StringComparison.OrdinalIgnoreCase))
-                {
-                    if (hour == 12)
-                        hour = 0;  // 12am = midnight = 00:00
-                }
-                else if (string.Equals(amPm, "pm", StringComparison.OrdinalIgnoreCase))
-                {
-                    if (hour != 12)
-                        hour += 12;  // 1pm = 13:00, but 12pm stays 12:00
-                }
-            }
-
-            timeOfDay = new TimeOnly(hour, minute);
+            return new ParseResult<ScheduleSpec>.Error(timeError.Message);
         }
+        var timeConstraints = ((ParseResult<TimeConstraints>.Success)timeConstraintResult).Value;
+
+        var timeOfDay = timeConstraints.TimeOfDay;
 
         // Extract day specifier (optional, context-aware) - REFACTORED
         // Parse day constraints using extracted method for better maintainability
@@ -598,152 +558,35 @@ internal sealed partial class NaturalLanguageParser : IScheduleParser
         var isNearestWeekday = advancedQuartzConstraints.IsNearestWeekday;
         var nthOccurrence = advancedQuartzConstraints.NthOccurrence;
 
-        // Check for combined month+day pattern first: "on january 1st", "on dec 25th"
-        // This is more specific than separate month and day patterns
-        var monthAndDayMatch = MonthAndDayPattern().Match(input);
-        MonthSpecifier monthSpecifier = new MonthSpecifier.None();
-
-        if (monthAndDayMatch.Success)
+        // Extract month constraints (optional) - REFACTORED
+        // Parse month constraints using extracted method for better maintainability
+        var monthConstraintResult = TryParseMonthConstraints(input, dayOfMonth);
+        if (monthConstraintResult is ParseResult<(MonthConstraints, int?)>.Error monthError)
         {
-            var monthString = monthAndDayMatch.Groups[1].Value;
-            var dayString = monthAndDayMatch.Groups[2].Value;
-
-            if (!MonthNames.TryGetValue(monthString, out var monthNum))
-            {
-                return new ParseResult<ScheduleSpec>.Error($"Invalid month name: {monthString}");
-            }
-
-            if (!int.TryParse(dayString, out var day) || day < 1 || day > 31)
-            {
-                return new ParseResult<ScheduleSpec>.Error($"Invalid day of month: {dayString}. Must be 1-31.");
-            }
-
-            monthSpecifier = new MonthSpecifier.Single(monthNum);
-            dayOfMonth = day;
+            return new ParseResult<ScheduleSpec>.Error(monthError.Message);
         }
+        var (monthConstraints, updatedDayOfMonth) =
+            ((ParseResult<(MonthConstraints, int?)>.Success)monthConstraintResult).Value;
 
-        // Extract month specifier (optional) if not already set by combined pattern
-        // Check for month list first (highest priority: "in jan,apr,jul,oct")
-        var monthListMatch = MonthListPattern().Match(input);
-        if (!monthAndDayMatch.Success && monthListMatch.Success)
-        {
-            var monthListString = monthListMatch.Groups[1].Value;
-            var monthStrings = monthListString.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-
-            List<int> months = [];
-            foreach (var monthStr in monthStrings)
-            {
-                if (!MonthNames.TryGetValue(monthStr, out var monthNum))
-                {
-                    return new ParseResult<ScheduleSpec>.Error($"Invalid month name: {monthStr}");
-                }
-                months.Add(monthNum);
-            }
-
-            if (months.Count < 2)
-            {
-                return new ParseResult<ScheduleSpec>.Error("Month list must contain at least 2 months");
-            }
-
-            monthSpecifier = new MonthSpecifier.List(months);
-        }
-        else if (!monthAndDayMatch.Success)
-        {
-            // Check for month range (medium priority: "between january and march")
-            var monthRangeMatch = MonthRangePattern().Match(input);
-            if (monthRangeMatch.Success)
-            {
-                var startMonth = monthRangeMatch.Groups[1].Value;
-                var endMonth = monthRangeMatch.Groups[2].Value;
-
-                if (!MonthNames.TryGetValue(startMonth, out var startMonthNum))
-                {
-                    return new ParseResult<ScheduleSpec>.Error($"Invalid month name: {startMonth}");
-                }
-
-                if (!MonthNames.TryGetValue(endMonth, out var endMonthNum))
-                {
-                    return new ParseResult<ScheduleSpec>.Error($"Invalid month name: {endMonth}");
-                }
-
-                if (startMonthNum >= endMonthNum)
-                {
-                    return new ParseResult<ScheduleSpec>.Error($"Month range start ({startMonth}) must be before end ({endMonth})");
-                }
-
-                monthSpecifier = new MonthSpecifier.Range(startMonthNum, endMonthNum);
-            }
-            else
-            {
-                // Check for single month (lowest priority: "in january")
-                var monthMatch = SpecificMonthPattern().Match(input);
-                if (monthMatch.Success)
-                {
-                    var monthString = monthMatch.Groups[1].Value;
-
-                    if (!MonthNames.TryGetValue(monthString, out var monthNum))
-                    {
-                        return new ParseResult<ScheduleSpec>.Error($"Invalid month name: {monthString}");
-                    }
-
-                    monthSpecifier = new MonthSpecifier.Single(monthNum);
-                }
-            }
-        }
+        var monthSpecifier = monthConstraints.Specifier;
+        dayOfMonth = updatedDayOfMonth; // May be updated by combined month+day pattern
 
         // Note: We allow month intervals combined with month selection for patterns like:
         // "every month on 15 in january,april,july,october" = 15th of specific months
         // This maps to cron: "0 0 15 1,4,7,10 *"
 
-        // Extract minute/hour/day lists and ranges
-        IReadOnlyList<int>? minuteList = null;
-        int? minuteStart = null, minuteEnd = null;
-        IReadOnlyList<int>? hourList = null;
-        int? hourStart = null, hourEnd = null;
+        // Minute/hour lists and ranges already parsed in TryParseTimeConstraints() - just assign values
+        var minuteList = timeConstraints.MinuteList;
+        var minuteStart = timeConstraints.MinuteStart;
+        var minuteEnd = timeConstraints.MinuteEnd;
+        var hourList = timeConstraints.HourList;
+        var hourStart = timeConstraints.HourStart;
+        var hourEnd = timeConstraints.HourEnd;
+
+        // Day lists and ranges (from dayConstraints)
         IReadOnlyList<int>? dayList = null;
         int? dayStart = null, dayEnd = null;
         int? year = null;
-
-        // Minute list: "at minutes 0,15,30,45" or "at minutes 0-2,4,6-8"
-        var minuteListMatch = MinuteListPattern().Match(input);
-        if (minuteListMatch.Success)
-        {
-            var notation = minuteListMatch.Groups[1].Value;
-            minuteList = ParseListNotation(notation, 0, 59);
-        }
-        // Minute range: "between minutes 0 and 30"
-        else
-        {
-            var minuteRangeMatch = MinuteRangePattern().Match(input);
-            if (minuteRangeMatch.Success)
-            {
-                minuteStart = int.Parse(minuteRangeMatch.Groups[1].Value);
-                minuteEnd = int.Parse(minuteRangeMatch.Groups[2].Value);
-            }
-        }
-
-        // Hour list: "at hours 9,12,15,18"
-        var hourListMatch = HourListPattern().Match(input);
-        if (hourListMatch.Success)
-        {
-            var notation = hourListMatch.Groups[1].Value;
-            hourList = ParseListNotation(notation, 0, 23);
-        }
-        // Hour range: "between hours 9 and 17" or "between hours 9am and 5pm"
-        else
-        {
-            var hourRangeMatch = HourRangePattern().Match(input);
-            if (hourRangeMatch.Success)
-            {
-                var startHourStr = hourRangeMatch.Groups[1].Value;
-                var startAmPm = hourRangeMatch.Groups[2].Success ? hourRangeMatch.Groups[2].Value : null;
-                var endHourStr = hourRangeMatch.Groups[3].Value;
-                var endAmPm = hourRangeMatch.Groups[4].Success ? hourRangeMatch.Groups[4].Value : null;
-
-                hourStart = ParseHour(startHourStr, startAmPm);
-                hourEnd = ParseHour(endHourStr, endAmPm);
-            }
-        }
 
         // Day list/range parsing already done in TryParseDayConstraints() - just assign values
         dayList = dayConstraints.DayList;
@@ -1157,6 +1000,232 @@ internal sealed partial class NaturalLanguageParser : IScheduleParser
             DayList = dayList,
             DayStart = dayStart,
             DayEnd = dayEnd
+        });
+    }
+
+    /// <summary>
+    /// Parse month-related constraints from natural language input
+    /// Handles combined month+day patterns, month lists, month ranges, and single months
+    /// Priority order: combined month+day > month list > month range > single month
+    /// Also updates dayOfMonth if combined pattern is used
+    /// </summary>
+    private ParseResult<(MonthConstraints, int? updatedDayOfMonth)> TryParseMonthConstraints(
+        string input,
+        int? currentDayOfMonth)
+    {
+        MonthSpecifier monthSpecifier = new MonthSpecifier.None();
+        int? dayOfMonth = currentDayOfMonth;
+
+        // Check for combined month+day pattern first: "on january 1st", "on dec 25th"
+        // This is more specific than separate month and day patterns
+        var monthAndDayMatch = MonthAndDayPattern().Match(input);
+
+        if (monthAndDayMatch.Success)
+        {
+            var monthString = monthAndDayMatch.Groups[1].Value;
+            var dayString = monthAndDayMatch.Groups[2].Value;
+
+            if (!MonthNames.TryGetValue(monthString, out var monthNum))
+            {
+                return new ParseResult<(MonthConstraints, int?)>.Error($"Invalid month name: {monthString}");
+            }
+
+            if (!int.TryParse(dayString, out var day) || day < 1 || day > 31)
+            {
+                return new ParseResult<(MonthConstraints, int?)>.Error($"Invalid day of month: {dayString}. Must be 1-31.");
+            }
+
+            monthSpecifier = new MonthSpecifier.Single(monthNum);
+            dayOfMonth = day;
+        }
+        // Extract month specifier (optional) if not already set by combined pattern
+        // Check for month list first (highest priority: "in jan,apr,jul,oct")
+        else
+        {
+            var monthListMatch = MonthListPattern().Match(input);
+            if (monthListMatch.Success)
+            {
+                var monthListString = monthListMatch.Groups[1].Value;
+                var monthStrings = monthListString.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+                List<int> months = [];
+                foreach (var monthStr in monthStrings)
+                {
+                    if (!MonthNames.TryGetValue(monthStr, out var monthNum))
+                    {
+                        return new ParseResult<(MonthConstraints, int?)>.Error($"Invalid month name: {monthStr}");
+                    }
+                    months.Add(monthNum);
+                }
+
+                if (months.Count < 2)
+                {
+                    return new ParseResult<(MonthConstraints, int?)>.Error("Month list must contain at least 2 months");
+                }
+
+                monthSpecifier = new MonthSpecifier.List(months);
+            }
+            else
+            {
+                // Check for month range (medium priority: "between january and march")
+                var monthRangeMatch = MonthRangePattern().Match(input);
+                if (monthRangeMatch.Success)
+                {
+                    var startMonth = monthRangeMatch.Groups[1].Value;
+                    var endMonth = monthRangeMatch.Groups[2].Value;
+
+                    if (!MonthNames.TryGetValue(startMonth, out var startMonthNum))
+                    {
+                        return new ParseResult<(MonthConstraints, int?)>.Error($"Invalid month name: {startMonth}");
+                    }
+
+                    if (!MonthNames.TryGetValue(endMonth, out var endMonthNum))
+                    {
+                        return new ParseResult<(MonthConstraints, int?)>.Error($"Invalid month name: {endMonth}");
+                    }
+
+                    if (startMonthNum >= endMonthNum)
+                    {
+                        return new ParseResult<(MonthConstraints, int?)>.Error($"Month range start ({startMonth}) must be before end ({endMonth})");
+                    }
+
+                    monthSpecifier = new MonthSpecifier.Range(startMonthNum, endMonthNum);
+                }
+                else
+                {
+                    // Check for single month (lowest priority: "in january")
+                    var monthMatch = SpecificMonthPattern().Match(input);
+                    if (monthMatch.Success)
+                    {
+                        var monthString = monthMatch.Groups[1].Value;
+
+                        if (!MonthNames.TryGetValue(monthString, out var monthNum))
+                        {
+                            return new ParseResult<(MonthConstraints, int?)>.Error($"Invalid month name: {monthString}");
+                        }
+
+                        monthSpecifier = new MonthSpecifier.Single(monthNum);
+                    }
+                }
+            }
+        }
+
+        var monthConstraints = new MonthConstraints { Specifier = monthSpecifier };
+        return new ParseResult<(MonthConstraints, int?)>.Success((monthConstraints, dayOfMonth));
+    }
+
+    /// <summary>
+    /// Parse time-related constraints from natural language input
+    /// Handles time of day, minute lists/ranges, and hour lists/ranges
+    /// </summary>
+    private ParseResult<TimeConstraints> TryParseTimeConstraints(string input)
+    {
+        TimeOnly? timeOfDay = null;
+        IReadOnlyList<int>? minuteList = null;
+        int? minuteStart = null, minuteEnd = null;
+        IReadOnlyList<int>? hourList = null;
+        int? hourStart = null, hourEnd = null;
+
+        // Extract time of day (optional): "at 2pm", "at 14:00", "at 3:30am"
+        var timeMatch = TimePattern().Match(input);
+        if (timeMatch.Success)
+        {
+            var hour = int.Parse(timeMatch.Groups[1].ValueSpan);
+            var minute = timeMatch.Groups[2].Success ? int.Parse(timeMatch.Groups[2].ValueSpan) : 0;
+            var amPm = timeMatch.Groups[3].Success ? timeMatch.Groups[3].Value : null;
+
+            // Validate hour before conversion
+            if (amPm != null)
+            {
+                // 12-hour format: hour must be 1-12
+                if (hour < 1 || hour > 12)
+                {
+                    return new ParseResult<TimeConstraints>.Error($"Invalid hour for 12-hour format: {hour} (must be 1-12)");
+                }
+            }
+            else
+            {
+                // 24-hour format: hour must be 0-23
+                if (hour < 0 || hour > 23)
+                {
+                    return new ParseResult<TimeConstraints>.Error($"Invalid hour for 24-hour format: {hour} (must be 0-23)");
+                }
+            }
+
+            // Validate minutes
+            if (minute < 0 || minute > 59)
+            {
+                return new ParseResult<TimeConstraints>.Error($"Invalid minutes: {minute} (must be 0-59)");
+            }
+
+            // Convert 12-hour to 24-hour if am/pm specified
+            if (amPm != null)
+            {
+                if (string.Equals(amPm, "am", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (hour == 12)
+                        hour = 0;  // 12am = midnight = 00:00
+                }
+                else if (string.Equals(amPm, "pm", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (hour != 12)
+                        hour += 12;  // 1pm = 13:00, but 12pm stays 12:00
+                }
+            }
+
+            timeOfDay = new TimeOnly(hour, minute);
+        }
+
+        // Minute list: "at minutes 0,15,30,45" or "at minutes 0-2,4,6-8"
+        var minuteListMatch = MinuteListPattern().Match(input);
+        if (minuteListMatch.Success)
+        {
+            var notation = minuteListMatch.Groups[1].Value;
+            minuteList = ParseListNotation(notation, 0, 59);
+        }
+        // Minute range: "between minutes 0 and 30"
+        else
+        {
+            var minuteRangeMatch = MinuteRangePattern().Match(input);
+            if (minuteRangeMatch.Success)
+            {
+                minuteStart = int.Parse(minuteRangeMatch.Groups[1].Value);
+                minuteEnd = int.Parse(minuteRangeMatch.Groups[2].Value);
+            }
+        }
+
+        // Hour list: "at hours 9,12,15,18"
+        var hourListMatch = HourListPattern().Match(input);
+        if (hourListMatch.Success)
+        {
+            var notation = hourListMatch.Groups[1].Value;
+            hourList = ParseListNotation(notation, 0, 23);
+        }
+        // Hour range: "between hours 9 and 17" or "between hours 9am and 5pm"
+        else
+        {
+            var hourRangeMatch = HourRangePattern().Match(input);
+            if (hourRangeMatch.Success)
+            {
+                var startHourStr = hourRangeMatch.Groups[1].Value;
+                var startAmPm = hourRangeMatch.Groups[2].Success ? hourRangeMatch.Groups[2].Value : null;
+                var endHourStr = hourRangeMatch.Groups[3].Value;
+                var endAmPm = hourRangeMatch.Groups[4].Success ? hourRangeMatch.Groups[4].Value : null;
+
+                hourStart = ParseHour(startHourStr, startAmPm);
+                hourEnd = ParseHour(endHourStr, endAmPm);
+            }
+        }
+
+        return new ParseResult<TimeConstraints>.Success(new TimeConstraints
+        {
+            TimeOfDay = timeOfDay,
+            MinuteList = minuteList,
+            MinuteStart = minuteStart,
+            MinuteEnd = minuteEnd,
+            HourList = hourList,
+            HourStart = hourStart,
+            HourEnd = hourEnd
         });
     }
 }
