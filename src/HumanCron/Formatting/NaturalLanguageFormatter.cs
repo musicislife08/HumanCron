@@ -61,7 +61,8 @@ internal sealed class NaturalLanguageFormatter : IScheduleFormatter
                 spec.HourStart.Value,
                 spec.HourEnd.Value,
                 "day",
-                spec);
+                spec,
+                useHourFormat: true);
         }
         if (spec is { DayStart: not null, DayEnd: not null, DayStep: not null })
         {
@@ -266,7 +267,9 @@ internal sealed class NaturalLanguageFormatter : IScheduleFormatter
         }
         else if (spec is { HourStart: not null, HourEnd: not null })
         {
-            parts.Add($"between hours {spec.HourStart.Value} and {spec.HourEnd.Value}");
+            var startTime = FormatHour(spec.HourStart.Value);
+            var endTime = FormatHour(spec.HourEnd.Value);
+            parts.Add($"between hours {startTime} and {endTime}");
             hasHourListOrRange = true;
         }
 
@@ -321,7 +324,8 @@ internal sealed class NaturalLanguageFormatter : IScheduleFormatter
         int rangeEnd,
         string scopeUnit,
         ScheduleSpec spec,
-        bool useOrdinals = false)
+        bool useOrdinals = false,
+        bool useHourFormat = false)
     {
         List<string> parts = ["every"];
 
@@ -330,12 +334,26 @@ internal sealed class NaturalLanguageFormatter : IScheduleFormatter
         var intervalPart = step == 1 ? unitName : $"{step} {unitName}";
         parts.Add(intervalPart);
 
-        // Range part: "between 0 and 30" or "between the 1st and 15th"
-        var startStr = useOrdinals ? FormatOrdinal(rangeStart) : rangeStart.ToString();
-        var endStr = useOrdinals ? FormatOrdinal(rangeEnd) : rangeEnd.ToString();
-        var betweenPart = useOrdinals
-            ? $"between the {startStr} and {endStr}"
-            : $"between {startStr} and {endStr}";
+        // Range part: "between 0 and 30", "between the 1st and 15th", or "between 9am and 5pm"
+        string startStr, endStr, betweenPart;
+        if (useOrdinals)
+        {
+            startStr = FormatOrdinal(rangeStart);
+            endStr = FormatOrdinal(rangeEnd);
+            betweenPart = $"between the {startStr} and {endStr}";
+        }
+        else if (useHourFormat)
+        {
+            startStr = FormatHour(rangeStart);
+            endStr = FormatHour(rangeEnd);
+            betweenPart = $"between {startStr} and {endStr}";
+        }
+        else
+        {
+            startStr = rangeStart.ToString();
+            endStr = rangeEnd.ToString();
+            betweenPart = $"between {startStr} and {endStr}";
+        }
         parts.Add(betweenPart);
 
         // Scope part: "of each hour" or "of each day" or "of each month"
@@ -396,14 +414,23 @@ internal sealed class NaturalLanguageFormatter : IScheduleFormatter
         // Format as 12-hour with am/pm for whole hours, 24-hour for fractional hours
         if (time.Minute == 0)
         {
-            var hour12 = time.Hour == 0 ? 12 : time.Hour > 12 ? time.Hour - 12 : time.Hour;
-            var ampm = time.Hour >= 12 ? "pm" : "am";
-            return $"at {hour12}{ampm}";
+            return $"at {FormatHour(time.Hour)}";
         }
         else
         {
             return $"at {time:HH:mm}";
         }
+    }
+
+    /// <summary>
+    /// Format hour as 12-hour time with am/pm (e.g., "9am", "5pm", "12pm")
+    /// </summary>
+    private static string FormatHour(int hour)
+    {
+        if (hour == 0) return "12am";
+        if (hour < 12) return $"{hour}am";
+        if (hour == 12) return "12pm";
+        return $"{hour - 12}pm";
     }
 
     /// <summary>

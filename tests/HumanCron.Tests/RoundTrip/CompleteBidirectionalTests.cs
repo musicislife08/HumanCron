@@ -236,7 +236,7 @@ public class CompleteBidirectionalTests
     [Test]
     public void RoundTrip_HourRange_FormatsAndParsesCorrectly()
     {
-        var natural = "every day between hours 9 and 17";
+        var natural = "every day between hours 9am and 5pm";
         var parseResult = _parser.Parse(natural, new ScheduleParserOptions { TimeZone = DateTimeZone.Utc });
         Assert.That(parseResult, Is.TypeOf<ParseResult<ScheduleSpec>.Success>());
         var spec = ((ParseResult<ScheduleSpec>.Success)parseResult).Value;
@@ -283,7 +283,7 @@ public class CompleteBidirectionalTests
     [Test]
     public void RoundTrip_HourRangeStep_FormatsAndParsesCorrectly()
     {
-        var natural = "every 2 hours between 9 and 17 of each day";
+        var natural = "every 2 hours between 9am and 5pm of each day";
         var parseResult = _parser.Parse(natural, new ScheduleParserOptions { TimeZone = DateTimeZone.Utc });
         Assert.That(parseResult, Is.TypeOf<ParseResult<ScheduleSpec>.Success>());
         var spec = ((ParseResult<ScheduleSpec>.Success)parseResult).Value;
@@ -490,7 +490,7 @@ public class CompleteBidirectionalTests
     [Test]
     public void RoundTrip_RangeStepWithMonthAndYear_FormatsCorrectly()
     {
-        var natural = "every 2 hours between 9 and 17 of each day in january in year 2025";
+        var natural = "every 2 hours between 9am and 5pm of each day in january in year 2025";
         var parseResult = _parser.Parse(natural, new ScheduleParserOptions { TimeZone = DateTimeZone.Utc });
         Assert.That(parseResult, Is.TypeOf<ParseResult<ScheduleSpec>.Success>());
         var spec = ((ParseResult<ScheduleSpec>.Success)parseResult).Value;
@@ -502,6 +502,10 @@ public class CompleteBidirectionalTests
         Assert.That(spec.HourStep, Is.EqualTo(2));
         Assert.That(spec.Month, Is.TypeOf<MonthSpecifier.Single>());
         Assert.That(spec.Year, Is.EqualTo(2025));
+
+        // Verify the formatted output can be parsed back
+        var reparsed = _parser.Parse(formatted, new ScheduleParserOptions { TimeZone = DateTimeZone.Utc });
+        Assert.That(reparsed, Is.TypeOf<ParseResult<ScheduleSpec>.Success>());
     }
 
     [Test]

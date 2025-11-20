@@ -105,9 +105,9 @@ internal sealed partial class NaturalLanguageParser : IScheduleParser
     private static partial Regex MinuteRangePattern();
 
     /// <summary>
-    /// Hour range patterns: "between hours 9 and 17"
+    /// Hour range patterns: "between hours 9 and 17" or "between hours 9am and 5pm"
     /// </summary>
-    [GeneratedRegex(@"between\s+hours\s+(\d+)\s+and\s+(\d+)", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"between\s+hours\s+(\d+)(am|pm)?\s+and\s+(\d+)(am|pm)?", RegexOptions.IgnoreCase)]
     private static partial Regex HourRangePattern();
 
     /// <summary>
@@ -117,9 +117,9 @@ internal sealed partial class NaturalLanguageParser : IScheduleParser
     private static partial Regex DayRangeWithOrdinalsPattern();
 
     /// <summary>
-    /// Range+step patterns: "every 5 minutes between 0 and 30 of each hour"
+    /// Range+step patterns: "every 5 minutes between 0 and 30 of each hour" or "every 2 hours between 9am and 5pm of each day"
     /// </summary>
-    [GeneratedRegex(@"every\s+(\d+)\s+(minutes?|hours?|days?)\s+between\s+(?:the\s+)?(\d+)(?:st|nd|rd|th)?\s+and\s+(?:the\s+)?(\d+)(?:st|nd|rd|th)?\s+of\s+each\s+(hour|day|month)", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"every\s+(\d+)\s+(minutes?|hours?|days?)\s+between\s+(?:the\s+)?(\d+)(am|pm)?(?:st|nd|rd|th)?\s+and\s+(?:the\s+)?(\d+)(am|pm)?(?:st|nd|rd|th)?\s+of\s+each\s+(hour|day|month)", RegexOptions.IgnoreCase)]
     private static partial Regex RangeStepPattern();
 
     /// <summary>
@@ -252,6 +252,32 @@ internal sealed partial class NaturalLanguageParser : IScheduleParser
     }
 
     /// <summary>
+    /// Parse hour with optional am/pm suffix to 24-hour format
+    /// Examples: "9" → 9, "9am" → 9, "9pm" → 21, "12am" → 0, "12pm" → 12
+    /// </summary>
+    private static int ParseHour(string hourStr, string? amPm)
+    {
+        var hour = int.Parse(hourStr);
+
+        if (string.IsNullOrEmpty(amPm))
+        {
+            // No am/pm specified, treat as 24-hour format
+            return hour;
+        }
+
+        var isAm = amPm.Equals("am", StringComparison.OrdinalIgnoreCase);
+
+        if (hour == 12)
+        {
+            // 12am = midnight (0), 12pm = noon (12)
+            return isAm ? 0 : 12;
+        }
+
+        // 1-11am = 1-11, 1-11pm = 13-23
+        return isAm ? hour : hour + 12;
+    }
+
+    /// <summary>
     /// Parse ordinal list like "1st, 15th, and 30th" to list of integers
     /// </summary>
     private static IReadOnlyList<int>? ParseOrdinalList(string ordinalList)
@@ -278,17 +304,32 @@ internal sealed partial class NaturalLanguageParser : IScheduleParser
     }
 
     /// <summary>
-    /// Parse range+step patterns: "every 5 minutes between 0 and 30 of each hour"
-    /// Regex groups: (1)=step (2)=unit (3)=start (4)=end (5)=scope
+    /// Parse range+step patterns: "every 5 minutes between 0 and 30 of each hour" or "every 2 hours between 9am and 5pm of each day"
+    /// Regex groups: (1)=step (2)=unit (3)=start (4)=start am/pm (5)=end (6)=end am/pm (7)=scope
     /// </summary>
     private ParseResult<ScheduleSpec> ParseRangeStepPattern(Match match, string fullInput, ScheduleParserOptions options)
     {
         // Extract values from regex
         var step = int.Parse(match.Groups[1].Value);
         var unitStr = match.Groups[2].Value.ToLowerInvariant();
-        var rangeStart = int.Parse(match.Groups[3].Value);
-        var rangeEnd = int.Parse(match.Groups[4].Value);
-        var scopeStr = match.Groups[5].Value.ToLowerInvariant();
+        var startStr = match.Groups[3].Value;
+        var startAmPm = match.Groups[4].Success ? match.Groups[4].Value : null;
+        var endStr = match.Groups[5].Value;
+        var endAmPm = match.Groups[6].Success ? match.Groups[6].Value : null;
+        var scopeStr = match.Groups[7].Value.ToLowerInvariant();
+
+        // Parse range start/end with am/pm support for hours
+        int rangeStart, rangeEnd;
+        if (unitStr is "hour" or "hours" && (startAmPm != null || endAmPm != null))
+        {
+            rangeStart = ParseHour(startStr, startAmPm);
+            rangeEnd = ParseHour(endStr, endAmPm);
+        }
+        else
+        {
+            rangeStart = int.Parse(startStr);
+            rangeEnd = int.Parse(endStr);
+        }
 
         // Determine unit from step unit string
         var unit = unitStr switch
@@ -883,14 +924,19 @@ internal sealed partial class NaturalLanguageParser : IScheduleParser
             var notation = hourListMatch.Groups[1].Value;
             hourList = ParseListNotation(notation, 0, 23);
         }
-        // Hour range: "between hours 9 and 17"
+        // Hour range: "between hours 9 and 17" or "between hours 9am and 5pm"
         else
         {
             var hourRangeMatch = HourRangePattern().Match(input);
             if (hourRangeMatch.Success)
             {
-                hourStart = int.Parse(hourRangeMatch.Groups[1].Value);
-                hourEnd = int.Parse(hourRangeMatch.Groups[2].Value);
+                var startHourStr = hourRangeMatch.Groups[1].Value;
+                var startAmPm = hourRangeMatch.Groups[2].Success ? hourRangeMatch.Groups[2].Value : null;
+                var endHourStr = hourRangeMatch.Groups[3].Value;
+                var endAmPm = hourRangeMatch.Groups[4].Success ? hourRangeMatch.Groups[4].Value : null;
+
+                hourStart = ParseHour(startHourStr, startAmPm);
+                hourEnd = ParseHour(endHourStr, endAmPm);
             }
         }
 
