@@ -519,30 +519,22 @@ internal sealed partial class NaturalLanguageParser : IScheduleParser
         // "every month on 15 in january,april,july,october" = 15th of specific months
         // This maps to cron: "0 0 15 1,4,7,10 *"
 
-        // Minute/hour lists and ranges already parsed in TryParseTimeConstraints() - just assign values
+        // Minute/hour/day lists and ranges already parsed - just assign values
         var minuteList = timeConstraints.MinuteList;
         var minuteStart = timeConstraints.MinuteStart;
         var minuteEnd = timeConstraints.MinuteEnd;
         var hourList = timeConstraints.HourList;
         var hourStart = timeConstraints.HourStart;
         var hourEnd = timeConstraints.HourEnd;
+        var dayList = dayConstraints.DayList;
+        var dayStart = dayConstraints.DayStart;
+        var dayEnd = dayConstraints.DayEnd;
 
-        // Day lists and ranges (from dayConstraints)
-        IReadOnlyList<int>? dayList = null;
-        int? dayStart = null, dayEnd = null;
-        int? year = null;
-
-        // Day list/range parsing already done in TryParseDayConstraints() - just assign values
-        dayList = dayConstraints.DayList;
-        dayStart = dayConstraints.DayStart;
-        dayEnd = dayConstraints.DayEnd;
-
-        // Year constraint: "in year 2025"
-        var yearMatch = YearPattern().Match(input);
-        if (yearMatch.Success)
-        {
-            year = int.Parse(yearMatch.Groups[1].Value);
-        }
+        // Extract year constraint (optional) - REFACTORED
+        var yearConstraintResult = TryParseYearConstraint(input);
+        // Year parsing never fails (always returns success with null or value)
+        var yearConstraint = ((ParseResult<YearConstraint>.Success)yearConstraintResult).Value;
+        var year = yearConstraint.Year;
 
         // Validate DayOfWeek and DayPattern are mutually exclusive (should not happen due to parsing logic, but defensive check)
         if (dayOfWeek.HasValue && dayPattern.HasValue)
@@ -1249,5 +1241,22 @@ internal sealed partial class NaturalLanguageParser : IScheduleParser
         }
 
         return new ParseResult<(int, IntervalUnit)>.Success((interval, unit));
+    }
+
+    /// <summary>
+    /// Parse year constraint from natural language input
+    /// Handles optional year specification: "in year 2025"
+    /// </summary>
+    private ParseResult<YearConstraint> TryParseYearConstraint(string input)
+    {
+        int? year = null;
+
+        var yearMatch = YearPattern().Match(input);
+        if (yearMatch.Success)
+        {
+            year = int.Parse(yearMatch.Groups[1].Value);
+        }
+
+        return new ParseResult<YearConstraint>.Success(new YearConstraint { Year = year });
     }
 }
