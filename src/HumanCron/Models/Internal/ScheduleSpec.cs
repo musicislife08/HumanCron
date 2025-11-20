@@ -35,6 +35,52 @@ internal abstract record MonthSpecifier
 }
 
 /// <summary>
+/// Day formatting strategy (discriminated union pattern)
+/// Determines how day constraints should be formatted in natural language
+/// Enforces precedence rules at compile time via exhaustive pattern matching
+/// </summary>
+internal abstract record DayFormatStrategy
+{
+    /// <summary>
+    /// Compact numeric notation with ranges: "on the 1-7,15-21,30"
+    /// Used when day list contains sequences of 3+ consecutive values
+    /// </summary>
+    public sealed record CompactList(IReadOnlyList<int> Days) : DayFormatStrategy;
+
+    /// <summary>
+    /// Ordinal notation for simple lists: "on the 1st and 15th" or "on the 1st, 15th, 30th"
+    /// Used when day list has no ranges (no 3+ consecutive sequences)
+    /// </summary>
+    public sealed record OrdinalList(IReadOnlyList<int> Days) : DayFormatStrategy;
+
+    /// <summary>
+    /// Combined month+day syntax: "on january 15th"
+    /// Used for yearly schedules with single month and single day
+    /// More natural than "on the 15th in january"
+    /// </summary>
+    public sealed record CombinedMonthDay(int Month, int Day) : DayFormatStrategy;
+
+    /// <summary>
+    /// Single ordinal day: "on the 15th"
+    /// Used when only DayOfMonth is specified (no list, no combined syntax)
+    /// </summary>
+    public sealed record SingleOrdinal(int Day) : DayFormatStrategy;
+
+    /// <summary>
+    /// Day range with ordinals: "between the 1st and 15th"
+    /// </summary>
+    public sealed record DayRange(int Start, int End) : DayFormatStrategy;
+
+    /// <summary>
+    /// No day constraint formatting needed
+    /// </summary>
+    public sealed record None : DayFormatStrategy;
+
+    // Prevent external inheritance - only the defined cases are valid
+    private DayFormatStrategy() { }
+}
+
+/// <summary>
 /// Represents a parsed schedule specification (format-agnostic)
 /// This is the intermediate representation between natural language and cron
 /// INTERNAL: Not exposed in public API - used internally for parsing/conversion

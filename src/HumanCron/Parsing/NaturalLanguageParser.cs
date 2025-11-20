@@ -99,6 +99,13 @@ internal sealed partial class NaturalLanguageParser : IScheduleParser
     private static partial Regex DayListWithOrdinalsPattern();
 
     /// <summary>
+    /// Day list compact notation: "on the 1-7,15-21,30" (numeric ranges like minute/hour lists)
+    /// Checked after ordinal patterns to avoid conflicts
+    /// </summary>
+    [GeneratedRegex(@"on\s+the\s+([\d,\-]+)", RegexOptions.IgnoreCase)]
+    private static partial Regex DayListCompactNotationPattern();
+
+    /// <summary>
     /// Minute range patterns: "between minutes 0 and 30"
     /// </summary>
     [GeneratedRegex(@"between\s+minutes\s+(\d+)\s+and\s+(\d+)", RegexOptions.IgnoreCase)]
@@ -571,227 +578,25 @@ internal sealed partial class NaturalLanguageParser : IScheduleParser
             timeOfDay = new TimeOnly(hour, minute);
         }
 
-        // Extract day specifier (optional, context-aware)
-        DayOfWeek? dayOfWeek = null;
-        DayPattern? dayPattern = null;
-        int? dayOfMonth = null;
-
-        // Advanced Quartz features
-        var isLastDay = false;
-        var isLastDayOfWeek = false;
-        int? lastDayOffset = null;
-        var isNearestWeekday = false;
-        int? nthOccurrence = null;
-
-        // For monthly intervals, "on" means day-of-month (1-31) or advanced features
-        if (unit == IntervalUnit.Months || unit == IntervalUnit.Years)
+        // Extract day specifier (optional, context-aware) - REFACTORED
+        // Parse day constraints using extracted method for better maintainability
+        var dayConstraintResult = TryParseDayConstraints(input, unit, specificDayMatch);
+        if (dayConstraintResult is ParseResult<(DayConstraints, AdvancedQuartzConstraints)>.Error dayError)
         {
-            // Check for advanced features first (higher priority)
-
-            // Last weekday: "last weekday"
-            var lastWeekdayMatch = LastWeekdayPattern().Match(input);
-            if (lastWeekdayMatch.Success)
-            {
-                isLastDay = true;
-                isNearestWeekday = true;
-            }
-            // Last day offset: "3rd to last day", "day before last"
-            else if (LastDayOffsetPattern().Match(input) is { Success: true } lastOffsetMatch)
-            {
-                if (lastOffsetMatch.Groups[1].Success)
-                {
-                    // "3rd to last day"
-                    if (!int.TryParse(lastOffsetMatch.Groups[1].ValueSpan, out var offset))
-                    {
-                        return new ParseResult<ScheduleSpec>.Error($"Invalid offset: {lastOffsetMatch.Groups[1].Value}");
-                    }
-                    lastDayOffset = offset;
-                }
-                else
-                {
-                    // "day before last"
-                    lastDayOffset = 1;
-                }
-            }
-            // Last day: "last day", "last day of month"
-            else if (LastDayPattern().Match(input).Success)
-            {
-                isLastDay = true;
-            }
-            // Last day-of-week: "last monday", "last friday"
-            else if (LastDayOfWeekPattern().Match(input) is { Success: true } lastDayOfWeekMatch)
-            {
-                var dayString = lastDayOfWeekMatch.Groups[1].Value;
-                if (!DayNames.TryGetValue(dayString, out var parsedDay))
-                {
-                    return new ParseResult<ScheduleSpec>.Error($"Invalid day: {dayString}");
-                }
-                dayOfWeek = parsedDay;
-                isLastDayOfWeek = true;
-            }
-            // Weekday nearest: "weekday nearest 15"
-            else if (WeekdayNearestPattern().Match(input) is { Success: true } weekdayNearestMatch)
-            {
-                if (!int.TryParse(weekdayNearestMatch.Groups[1].ValueSpan, out var day))
-                {
-                    return new ParseResult<ScheduleSpec>.Error($"Invalid day: {weekdayNearestMatch.Groups[1].Value}");
-                }
-                if (day < 1 || day > 31)
-                {
-                    return new ParseResult<ScheduleSpec>.Error($"Day for weekday nearest must be 1-31, got: {day}");
-                }
-                dayOfMonth = day;
-                isNearestWeekday = true;
-            }
-            // Nth occurrence: "1st monday", "3rd friday"
-            else if (NthOccurrencePattern().Match(input) is { Success: true } nthMatch)
-            {
-                if (!int.TryParse(nthMatch.Groups[1].ValueSpan, out var nth))
-                {
-                    return new ParseResult<ScheduleSpec>.Error($"Invalid occurrence number: {nthMatch.Groups[1].Value}");
-                }
-                if (nth < 1 || nth > 5)
-                {
-                    return new ParseResult<ScheduleSpec>.Error($"Occurrence number must be 1-5, got: {nth}");
-                }
-
-                var dayString = nthMatch.Groups[2].Value;
-                if (!DayNames.TryGetValue(dayString, out var parsedDay))
-                {
-                    return new ParseResult<ScheduleSpec>.Error($"Invalid day: {dayString}");
-                }
-
-                nthOccurrence = nth;
-                dayOfWeek = parsedDay;
-            }
-            // Day-of-week pattern: "on monday" (when combined with monthly, e.g., "every month on monday")
-            else if (DayOfWeekPattern().Match(input) is { Success: true } dowMatch)
-            {
-                var dayString = dowMatch.Groups[1].Value.ToLowerInvariant();
-
-                // Check for patterns first
-                if (dayString is "weekday" or "weekdays")
-                {
-                    dayPattern = DayPattern.Weekdays;
-                }
-                else if (dayString is "weekend" or "weekends")
-                {
-                    dayPattern = DayPattern.Weekends;
-                }
-                else if (DayNames.TryGetValue(dayString, out var parsedDay))
-                {
-                    dayOfWeek = parsedDay;
-                }
-                else
-                {
-                    return new ParseResult<ScheduleSpec>.Error($"Invalid day: {dayString}");
-                }
-            }
-            // Regular day-of-month: "on 15"
-            else
-            {
-                var dayOfMonthMatch = DayOfMonthPattern().Match(input);
-                if (dayOfMonthMatch.Success)
-                {
-                    var daySpan = dayOfMonthMatch.Groups[1].ValueSpan;
-                    if (!int.TryParse(daySpan, out var day))
-                    {
-                        return new ParseResult<ScheduleSpec>.Error($"Invalid day of month: {daySpan.ToString()}");
-                    }
-
-                    // Validate day of month is 1-31
-                    if (day < 1 || day > 31)
-                    {
-                        return new ParseResult<ScheduleSpec>.Error($"Day of month must be 1-31, got: {day}");
-                    }
-
-                    dayOfMonth = day;
-                }
-            }
+            return new ParseResult<ScheduleSpec>.Error(dayError.Message);
         }
-        else
-        {
-            // For other intervals, check for day range first (higher priority)
-            var dayRangeMatch = DayRangePattern().Match(input);
-            if (dayRangeMatch.Success)
-            {
-                var startDay = dayRangeMatch.Groups[1].Value;
-                var endDay = dayRangeMatch.Groups[2].Value;
+        var (dayConstraints, advancedQuartzConstraints) =
+            ((ParseResult<(DayConstraints, AdvancedQuartzConstraints)>.Success)dayConstraintResult).Value;
 
-                if (!DayNames.TryGetValue(startDay, out var startDayOfWeek))
-                {
-                    return new ParseResult<ScheduleSpec>.Error($"Invalid day name: {startDay}");
-                }
+        var dayOfWeek = dayConstraints.DayOfWeek;
+        var dayPattern = dayConstraints.DayPattern;
+        var dayOfMonth = dayConstraints.DayOfMonth;
 
-                if (!DayNames.TryGetValue(endDay, out var endDayOfWeek))
-                {
-                    return new ParseResult<ScheduleSpec>.Error($"Invalid day name: {endDay}");
-                }
-
-                switch (startDayOfWeek)
-                {
-                    // Check for recognized day ranges
-                    case DayOfWeek.Monday when endDayOfWeek == DayOfWeek.Friday:
-                        dayPattern = DayPattern.Weekdays;
-                        break;
-                    case DayOfWeek.Saturday when endDayOfWeek == DayOfWeek.Sunday:
-                        dayPattern = DayPattern.Weekends;
-                        break;
-                    default:
-                        // TODO: Add DayRange support to ScheduleSpec for arbitrary ranges
-                        return new ParseResult<ScheduleSpec>.Error($"Day ranges other than 'between monday and friday' (weekdays) or 'between saturday and sunday' (weekends) are not yet supported. Found: {startDay} to {endDay}");
-                }
-            }
-            else
-            {
-                // Check if user tried to use day-of-month syntax with non-monthly interval
-                var dayOfMonthMatch = DayOfMonthPattern().Match(input);
-                if (dayOfMonthMatch.Success)
-                {
-                    var unitName = unit switch
-                    {
-                        IntervalUnit.Seconds => "seconds",
-                        IntervalUnit.Minutes => "minutes",
-                        IntervalUnit.Hours => "hours",
-                        IntervalUnit.Days => "days",
-                        IntervalUnit.Weeks => "weeks",
-                        _ => unit.ToString()
-                    };
-
-                    return new ParseResult<ScheduleSpec>.Error(
-                        $"Day-of-month (on {dayOfMonthMatch.Groups[1].ValueSpan.ToString()}) is only valid with monthly (month/months) or yearly (year/years) intervals, not {unitName}. " +
-                        $"Did you mean to use a day-of-week instead? (e.g., 'every monday')");
-                }
-
-                // Check for day-of-week with "on" prefix (e.g., "every hour on monday")
-                var dayOfWeekMatch = DayOfWeekPattern().Match(input);
-                if (dayOfWeekMatch.Success || specificDayMatch.Success)
-                {
-                    // Use whichever pattern matched
-                    var dayString = dayOfWeekMatch.Success
-                        ? dayOfWeekMatch.Groups[1].Value.ToLowerInvariant()
-                        : specificDayMatch.Groups[1].Value.ToLowerInvariant();
-
-                    // Check for patterns first
-                    if (dayString is "weekday" or "weekdays")
-                    {
-                        dayPattern = DayPattern.Weekdays;
-                    }
-                    else if (dayString is "weekend" or "weekends")
-                    {
-                        dayPattern = DayPattern.Weekends;
-                    }
-                    else if (DayNames.TryGetValue(dayString, out var parsedDay))
-                    {
-                        dayOfWeek = parsedDay;
-                    }
-                    else
-                    {
-                        return new ParseResult<ScheduleSpec>.Error($"Invalid day: {dayString}");
-                    }
-                }
-            }
-        }
+        var isLastDay = advancedQuartzConstraints.IsLastDay;
+        var isLastDayOfWeek = advancedQuartzConstraints.IsLastDayOfWeek;
+        var lastDayOffset = advancedQuartzConstraints.LastDayOffset;
+        var isNearestWeekday = advancedQuartzConstraints.IsNearestWeekday;
+        var nthOccurrence = advancedQuartzConstraints.NthOccurrence;
 
         // Check for combined month+day pattern first: "on january 1st", "on dec 25th"
         // This is more specific than separate month and day patterns
@@ -940,24 +745,10 @@ internal sealed partial class NaturalLanguageParser : IScheduleParser
             }
         }
 
-        // Day list with ordinals: "on the 1st, 15th, and 30th"
-        var dayListMatch = DayListWithOrdinalsPattern().Match(input);
-        if (dayListMatch.Success)
-        {
-            dayList = ParseOrdinalList(dayListMatch.Value);
-        }
-        // Day range with ordinals: "between the 1st and 15th"
-        else
-        {
-            var dayRangeMatch = DayRangeWithOrdinalsPattern().Match(input);
-            if (dayRangeMatch.Success)
-            {
-                var startOrdinal = dayRangeMatch.Groups[1].Value + dayRangeMatch.Groups[2].Value;
-                var endOrdinal = dayRangeMatch.Groups[3].Value + dayRangeMatch.Groups[4].Value;
-                dayStart = ParseOrdinal(startOrdinal);
-                dayEnd = ParseOrdinal(endOrdinal);
-            }
-        }
+        // Day list/range parsing already done in TryParseDayConstraints() - just assign values
+        dayList = dayConstraints.DayList;
+        dayStart = dayConstraints.DayStart;
+        dayEnd = dayConstraints.DayEnd;
 
         // Year constraint: "in year 2025"
         var yearMatch = YearPattern().Match(input);
@@ -998,6 +789,374 @@ internal sealed partial class NaturalLanguageParser : IScheduleParser
             DayStart = dayStart,
             DayEnd = dayEnd,
             Year = year
+        });
+    }
+
+    /// <summary>
+    /// Parse day-related constraints from natural language input
+    /// Handles day-of-week, day-of-month, day patterns, lists, ranges, and advanced Quartz features
+    /// Context-aware: behavior differs for monthly/yearly vs other intervals
+    /// </summary>
+    private ParseResult<(DayConstraints, AdvancedQuartzConstraints)> TryParseDayConstraints(
+        string input,
+        IntervalUnit unit,
+        Match specificDayMatch)
+    {
+        var dayConstraints = new DayConstraints();
+        var advancedConstraints = new AdvancedQuartzConstraints();
+
+        // For monthly/yearly intervals, "on" means day-of-month or advanced Quartz features
+        if (unit == IntervalUnit.Months || unit == IntervalUnit.Years)
+        {
+            var result = ParseMonthlyDayConstraints(input, specificDayMatch);
+            if (result is ParseResult<(DayConstraints, AdvancedQuartzConstraints)>.Error error)
+            {
+                return error;
+            }
+            var success = (ParseResult<(DayConstraints, AdvancedQuartzConstraints)>.Success)result;
+            dayConstraints = success.Value.Item1;
+            advancedConstraints = success.Value.Item2;
+        }
+        else
+        {
+            // For other intervals, check for day-of-week patterns
+            var result = ParseNonMonthlyDayConstraints(input, unit, specificDayMatch);
+            if (result is ParseResult<DayConstraints>.Error error)
+            {
+                return new ParseResult<(DayConstraints, AdvancedQuartzConstraints)>.Error(error.Message);
+            }
+            var success = (ParseResult<DayConstraints>.Success)result;
+            dayConstraints = success.Value;
+        }
+
+        // Parse day lists and ranges (applies to all intervals)
+        var listRangeResult = ParseDayListsAndRanges(input);
+        if (listRangeResult is ParseResult<DayConstraints>.Error listError)
+        {
+            return new ParseResult<(DayConstraints, AdvancedQuartzConstraints)>.Error(listError.Message);
+        }
+        var listSuccess = (ParseResult<DayConstraints>.Success)listRangeResult;
+
+        // Merge day list/range constraints with existing constraints
+        dayConstraints = dayConstraints with
+        {
+            DayList = listSuccess.Value.DayList ?? dayConstraints.DayList,
+            DayStart = listSuccess.Value.DayStart ?? dayConstraints.DayStart,
+            DayEnd = listSuccess.Value.DayEnd ?? dayConstraints.DayEnd
+        };
+
+        return new ParseResult<(DayConstraints, AdvancedQuartzConstraints)>.Success((dayConstraints, advancedConstraints));
+    }
+
+    /// <summary>
+    /// Parse day constraints for monthly/yearly intervals (day-of-month, advanced Quartz features)
+    /// </summary>
+    private ParseResult<(DayConstraints, AdvancedQuartzConstraints)> ParseMonthlyDayConstraints(
+        string input,
+        Match specificDayMatch)
+    {
+        DayOfWeek? dayOfWeek = null;
+        DayPattern? dayPattern = null;
+        int? dayOfMonth = null;
+
+        var isLastDay = false;
+        var isLastDayOfWeek = false;
+        int? lastDayOffset = null;
+        var isNearestWeekday = false;
+        int? nthOccurrence = null;
+
+        // Check for advanced features first (higher priority)
+
+        // Last weekday: "last weekday"
+        var lastWeekdayMatch = LastWeekdayPattern().Match(input);
+        if (lastWeekdayMatch.Success)
+        {
+            isLastDay = true;
+            isNearestWeekday = true;
+        }
+        // Last day offset: "3rd to last day", "day before last"
+        else if (LastDayOffsetPattern().Match(input) is { Success: true } lastOffsetMatch)
+        {
+            if (lastOffsetMatch.Groups[1].Success)
+            {
+                // "3rd to last day"
+                if (!int.TryParse(lastOffsetMatch.Groups[1].ValueSpan, out var offset))
+                {
+                    return new ParseResult<(DayConstraints, AdvancedQuartzConstraints)>.Error(
+                        $"Invalid offset: {lastOffsetMatch.Groups[1].Value}");
+                }
+                lastDayOffset = offset;
+            }
+            else
+            {
+                // "day before last"
+                lastDayOffset = 1;
+            }
+        }
+        // Last day: "last day", "last day of month"
+        else if (LastDayPattern().Match(input).Success)
+        {
+            isLastDay = true;
+        }
+        // Last day-of-week: "last monday", "last friday"
+        else if (LastDayOfWeekPattern().Match(input) is { Success: true } lastDayOfWeekMatch)
+        {
+            var dayString = lastDayOfWeekMatch.Groups[1].Value;
+            if (!DayNames.TryGetValue(dayString, out var parsedDay))
+            {
+                return new ParseResult<(DayConstraints, AdvancedQuartzConstraints)>.Error($"Invalid day: {dayString}");
+            }
+            dayOfWeek = parsedDay;
+            isLastDayOfWeek = true;
+        }
+        // Weekday nearest: "weekday nearest 15"
+        else if (WeekdayNearestPattern().Match(input) is { Success: true } weekdayNearestMatch)
+        {
+            if (!int.TryParse(weekdayNearestMatch.Groups[1].ValueSpan, out var day))
+            {
+                return new ParseResult<(DayConstraints, AdvancedQuartzConstraints)>.Error(
+                    $"Invalid day: {weekdayNearestMatch.Groups[1].Value}");
+            }
+            if (day < 1 || day > 31)
+            {
+                return new ParseResult<(DayConstraints, AdvancedQuartzConstraints)>.Error(
+                    $"Day for weekday nearest must be 1-31, got: {day}");
+            }
+            dayOfMonth = day;
+            isNearestWeekday = true;
+        }
+        // Nth occurrence: "1st monday", "3rd friday"
+        else if (NthOccurrencePattern().Match(input) is { Success: true } nthMatch)
+        {
+            if (!int.TryParse(nthMatch.Groups[1].ValueSpan, out var nth))
+            {
+                return new ParseResult<(DayConstraints, AdvancedQuartzConstraints)>.Error(
+                    $"Invalid occurrence number: {nthMatch.Groups[1].Value}");
+            }
+            if (nth < 1 || nth > 5)
+            {
+                return new ParseResult<(DayConstraints, AdvancedQuartzConstraints)>.Error(
+                    $"Occurrence number must be 1-5, got: {nth}");
+            }
+
+            var dayString = nthMatch.Groups[2].Value;
+            if (!DayNames.TryGetValue(dayString, out var parsedDay))
+            {
+                return new ParseResult<(DayConstraints, AdvancedQuartzConstraints)>.Error($"Invalid day: {dayString}");
+            }
+
+            nthOccurrence = nth;
+            dayOfWeek = parsedDay;
+        }
+        // Day-of-week pattern: "on monday" (when combined with monthly, e.g., "every month on monday")
+        else if (DayOfWeekPattern().Match(input) is { Success: true } dowMatch)
+        {
+            var dayString = dowMatch.Groups[1].Value.ToLowerInvariant();
+
+            // Check for patterns first
+            if (dayString is "weekday" or "weekdays")
+            {
+                dayPattern = DayPattern.Weekdays;
+            }
+            else if (dayString is "weekend" or "weekends")
+            {
+                dayPattern = DayPattern.Weekends;
+            }
+            else if (DayNames.TryGetValue(dayString, out var parsedDay))
+            {
+                dayOfWeek = parsedDay;
+            }
+            else
+            {
+                return new ParseResult<(DayConstraints, AdvancedQuartzConstraints)>.Error($"Invalid day: {dayString}");
+            }
+        }
+        // Regular day-of-month: "on 15"
+        else
+        {
+            var dayOfMonthMatch = DayOfMonthPattern().Match(input);
+            if (dayOfMonthMatch.Success)
+            {
+                var daySpan = dayOfMonthMatch.Groups[1].ValueSpan;
+                if (!int.TryParse(daySpan, out var day))
+                {
+                    return new ParseResult<(DayConstraints, AdvancedQuartzConstraints)>.Error(
+                        $"Invalid day of month: {daySpan.ToString()}");
+                }
+
+                // Validate day of month is 1-31
+                if (day < 1 || day > 31)
+                {
+                    return new ParseResult<(DayConstraints, AdvancedQuartzConstraints)>.Error(
+                        $"Day of month must be 1-31, got: {day}");
+                }
+
+                dayOfMonth = day;
+            }
+        }
+
+        var dayConstraints = new DayConstraints
+        {
+            DayOfWeek = dayOfWeek,
+            DayPattern = dayPattern,
+            DayOfMonth = dayOfMonth
+        };
+
+        var advancedConstraints = new AdvancedQuartzConstraints
+        {
+            IsLastDay = isLastDay,
+            IsLastDayOfWeek = isLastDayOfWeek,
+            LastDayOffset = lastDayOffset,
+            IsNearestWeekday = isNearestWeekday,
+            NthOccurrence = nthOccurrence
+        };
+
+        return new ParseResult<(DayConstraints, AdvancedQuartzConstraints)>.Success((dayConstraints, advancedConstraints));
+    }
+
+    /// <summary>
+    /// Parse day constraints for non-monthly intervals (day-of-week, day patterns, ranges)
+    /// </summary>
+    private ParseResult<DayConstraints> ParseNonMonthlyDayConstraints(
+        string input,
+        IntervalUnit unit,
+        Match specificDayMatch)
+    {
+        DayOfWeek? dayOfWeek = null;
+        DayPattern? dayPattern = null;
+
+        // For other intervals, check for day range first (higher priority)
+        var dayRangeMatch = DayRangePattern().Match(input);
+        if (dayRangeMatch.Success)
+        {
+            var startDay = dayRangeMatch.Groups[1].Value;
+            var endDay = dayRangeMatch.Groups[2].Value;
+
+            if (!DayNames.TryGetValue(startDay, out var startDayOfWeek))
+            {
+                return new ParseResult<DayConstraints>.Error($"Invalid day name: {startDay}");
+            }
+
+            if (!DayNames.TryGetValue(endDay, out var endDayOfWeek))
+            {
+                return new ParseResult<DayConstraints>.Error($"Invalid day name: {endDay}");
+            }
+
+            switch (startDayOfWeek)
+            {
+                // Check for recognized day ranges
+                case DayOfWeek.Monday when endDayOfWeek == DayOfWeek.Friday:
+                    dayPattern = DayPattern.Weekdays;
+                    break;
+                case DayOfWeek.Saturday when endDayOfWeek == DayOfWeek.Sunday:
+                    dayPattern = DayPattern.Weekends;
+                    break;
+                default:
+                    // TODO: Add DayRange support to ScheduleSpec for arbitrary ranges
+                    return new ParseResult<DayConstraints>.Error(
+                        $"Day ranges other than 'between monday and friday' (weekdays) or 'between saturday and sunday' (weekends) are not yet supported. Found: {startDay} to {endDay}");
+            }
+        }
+        else
+        {
+            // Check if user tried to use day-of-month syntax with non-monthly interval
+            var dayOfMonthMatch = DayOfMonthPattern().Match(input);
+            if (dayOfMonthMatch.Success)
+            {
+                var unitName = unit switch
+                {
+                    IntervalUnit.Seconds => "seconds",
+                    IntervalUnit.Minutes => "minutes",
+                    IntervalUnit.Hours => "hours",
+                    IntervalUnit.Days => "days",
+                    IntervalUnit.Weeks => "weeks",
+                    _ => unit.ToString()
+                };
+
+                return new ParseResult<DayConstraints>.Error(
+                    $"Day-of-month (on {dayOfMonthMatch.Groups[1].ValueSpan.ToString()}) is only valid with monthly (month/months) or yearly (year/years) intervals, not {unitName}. " +
+                    $"Did you mean to use a day-of-week instead? (e.g., 'every monday')");
+            }
+
+            // Check for day-of-week with "on" prefix (e.g., "every hour on monday")
+            var dayOfWeekMatch = DayOfWeekPattern().Match(input);
+            if (dayOfWeekMatch.Success || specificDayMatch.Success)
+            {
+                // Use whichever pattern matched
+                var dayString = dayOfWeekMatch.Success
+                    ? dayOfWeekMatch.Groups[1].Value.ToLowerInvariant()
+                    : specificDayMatch.Groups[1].Value.ToLowerInvariant();
+
+                // Check for patterns first
+                if (dayString is "weekday" or "weekdays")
+                {
+                    dayPattern = DayPattern.Weekdays;
+                }
+                else if (dayString is "weekend" or "weekends")
+                {
+                    dayPattern = DayPattern.Weekends;
+                }
+                else if (DayNames.TryGetValue(dayString, out var parsedDay))
+                {
+                    dayOfWeek = parsedDay;
+                }
+                else
+                {
+                    return new ParseResult<DayConstraints>.Error($"Invalid day: {dayString}");
+                }
+            }
+        }
+
+        return new ParseResult<DayConstraints>.Success(new DayConstraints
+        {
+            DayOfWeek = dayOfWeek,
+            DayPattern = dayPattern
+        });
+    }
+
+    /// <summary>
+    /// Parse day lists and ranges: "on the 1st, 15th, 30th" or "on the 1-7,15-21,30" or "between the 1st and 15th"
+    /// </summary>
+    private ParseResult<DayConstraints> ParseDayListsAndRanges(string input)
+    {
+        IReadOnlyList<int>? dayList = null;
+        int? dayStart = null, dayEnd = null;
+
+        // Check ordinals first (more specific patterns take precedence)
+        // Day list with ordinals: "on the 1st, 15th, and 30th"
+        var dayListMatch = DayListWithOrdinalsPattern().Match(input);
+        if (dayListMatch.Success)
+        {
+            dayList = ParseOrdinalList(dayListMatch.Value);
+        }
+        // Day range with ordinals: "between the 1st and 15th"
+        else
+        {
+            var dayRangeMatch = DayRangeWithOrdinalsPattern().Match(input);
+            if (dayRangeMatch.Success)
+            {
+                var startOrdinal = dayRangeMatch.Groups[1].Value + dayRangeMatch.Groups[2].Value;
+                var endOrdinal = dayRangeMatch.Groups[3].Value + dayRangeMatch.Groups[4].Value;
+                dayStart = ParseOrdinal(startOrdinal);
+                dayEnd = ParseOrdinal(endOrdinal);
+            }
+            // Day list compact notation: "on the 1-7,15-21,30" (last, matches numeric-only patterns)
+            else
+            {
+                var dayListCompactMatch = DayListCompactNotationPattern().Match(input);
+                if (dayListCompactMatch.Success)
+                {
+                    var notation = dayListCompactMatch.Groups[1].Value;
+                    dayList = ParseListNotation(notation, 1, 31);
+                }
+            }
+        }
+
+        return new ParseResult<DayConstraints>.Success(new DayConstraints
+        {
+            DayList = dayList,
+            DayStart = dayStart,
+            DayEnd = dayEnd
         });
     }
 }

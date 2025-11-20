@@ -224,34 +224,16 @@ internal sealed class NaturalLanguageFormatter : IScheduleFormatter
             var dayName = spec.DayOfWeek.Value.ToString().ToLowerInvariant();
             parts.Add($"on the {FormatOrdinal(spec.NthOccurrence.Value)} {dayName}");
         }
-        // Combined month+day: "on january 1st" (more natural than "on the 1st in january")
-        // Use this for yearly schedules with a single month
-        // Skip if DayList has multiple items (use day list formatter for those)
-        // Use combined syntax if DayList has 0 or 1 items
-        else if (effectiveUnit == IntervalUnit.Years && spec.DayOfMonth.HasValue && spec.Month is MonthSpecifier.Single && (spec.DayList is null or { Count: <= 1 }))
+        // Day constraints using discriminated union pattern
+        // Determines strategy, then formats - clear separation of concerns
+        else
         {
-            var single = (MonthSpecifier.Single)spec.Month;
-            var monthName = MonthNumberToName[single.Month];
-            parts.Add($"on {monthName} {FormatOrdinal(spec.DayOfMonth.Value)}");
-        }
-        // Day list: "on the 1st, 15th, and 30th" or "on the 1st and 15th"
-        else if (spec.DayList is { Count: > 0 })
-        {
-            var ordinals = spec.DayList.Select(FormatOrdinal).ToList();
-            var dayListStr = ordinals.Count == 2
-                ? string.Join(" and ", ordinals) // "1st and 15th"
-                : string.Join(", ", ordinals); // "1st, 15th, 30th" (or could use Oxford comma)
-            parts.Add($"on the {dayListStr}");
-        }
-        // Day range: "between the 1st and 15th"
-        else if (spec is { DayStart: not null, DayEnd: not null })
-        {
-            parts.Add($"between the {FormatOrdinal(spec.DayStart.Value)} and {FormatOrdinal(spec.DayEnd.Value)}");
-        }
-        // Regular day-of-month: "on the 15th"
-        else if (spec.DayOfMonth.HasValue)
-        {
-            parts.Add($"on the {FormatOrdinal(spec.DayOfMonth.Value)}");
+            var dayStrategy = DetermineDayFormatStrategy(spec, effectiveUnit, isMonthlyWithSingleMonth);
+            var dayFormatted = FormatDayStrategy(dayStrategy);
+            if (!string.IsNullOrEmpty(dayFormatted))
+            {
+                parts.Add(dayFormatted);
+            }
         }
 
         // Add time constraints - check for lists/ranges first, then time-of-day
@@ -495,5 +477,109 @@ internal sealed class NaturalLanguageFormatter : IScheduleFormatter
         }
 
         return string.Join(",", parts);
+    }
+
+    /// <summary>
+    /// Determine which day formatting strategy to use based on the schedule spec
+    /// Encodes precedence rules in one place for clarity and maintainability
+    /// </summary>
+    private static DayFormatStrategy DetermineDayFormatStrategy(
+        ScheduleSpec spec,
+        IntervalUnit effectiveUnit,
+        bool isMonthlyWithSingleMonth)
+    {
+        // PRIORITY 1: Compact day list with ranges (3+ consecutive values)
+        // Example: "on the 1-7,15-21,30"
+        // Skip if DayList is redundant with DayOfMonth (parser sets both for single ordinals)
+        if (spec.DayList is { Count: > 0 } dayList)
+        {
+            // If DayList has only one value that equals DayOfMonth, skip it (redundant)
+            if (dayList.Count == 1 && spec.DayOfMonth.HasValue && dayList[0] == spec.DayOfMonth.Value)
+            {
+                // Fall through to check other strategies
+            }
+            else
+            {
+                var compactStr = CompactList(dayList);
+                if (compactStr.Contains('-'))
+                {
+                    return new DayFormatStrategy.CompactList(dayList);
+                }
+                return new DayFormatStrategy.OrdinalList(dayList);
+            }
+        }
+
+        // PRIORITY 2: Combined month+day syntax for yearly schedules
+        // Example: "on january 15th" (more natural than "on the 15th in january")
+        // Only use if no DayList (already checked above)
+        if (effectiveUnit == IntervalUnit.Years
+            && spec.Month is MonthSpecifier.Single single
+            && spec.DayOfMonth.HasValue)
+        {
+            return new DayFormatStrategy.CombinedMonthDay(single.Month, spec.DayOfMonth.Value);
+        }
+
+        // PRIORITY 3: Day range with ordinals
+        // Example: "between the 1st and 15th"
+        if (spec is { DayStart: not null, DayEnd: not null })
+        {
+            return new DayFormatStrategy.DayRange(spec.DayStart.Value, spec.DayEnd.Value);
+        }
+
+        // PRIORITY 4: Single day-of-month
+        // Example: "on the 15th"
+        if (spec.DayOfMonth.HasValue)
+        {
+            return new DayFormatStrategy.SingleOrdinal(spec.DayOfMonth.Value);
+        }
+
+        // No day constraint
+        return new DayFormatStrategy.None();
+    }
+
+    /// <summary>
+    /// Format a day formatting strategy into natural language
+    /// Uses exhaustive switch expression - compiler ensures all cases are handled
+    /// </summary>
+    private string FormatDayStrategy(DayFormatStrategy strategy)
+    {
+        return strategy switch
+        {
+            DayFormatStrategy.CompactList(var days) =>
+                $"on the {CompactList(days)}",
+
+            DayFormatStrategy.OrdinalList(var days) =>
+                FormatOrdinalDayList(days),
+
+            DayFormatStrategy.CombinedMonthDay(var month, var day) =>
+                $"on {MonthNumberToName[month]} {FormatOrdinal(day)}",
+
+            DayFormatStrategy.SingleOrdinal(var day) =>
+                $"on the {FormatOrdinal(day)}",
+
+            DayFormatStrategy.DayRange(var start, var end) =>
+                $"between the {FormatOrdinal(start)} and {FormatOrdinal(end)}",
+
+            DayFormatStrategy.None => "",
+
+            // Compiler error if we add a new case and forget to handle it!
+            _ => throw new InvalidOperationException($"Unknown day format strategy: {strategy.GetType().Name}")
+        };
+    }
+
+    /// <summary>
+    /// Format ordinal day list with proper conjunction handling
+    /// Examples: "on the 1st", "on the 1st and 15th", "on the 1st, 15th, 30th"
+    /// </summary>
+    private static string FormatOrdinalDayList(IReadOnlyList<int> days)
+    {
+        var ordinals = days.Select(FormatOrdinal).ToList();
+        string dayListStr = ordinals.Count switch
+        {
+            1 => ordinals[0],
+            2 => string.Join(" and ", ordinals),
+            _ => string.Join(", ", ordinals)
+        };
+        return $"on the {dayListStr}";
     }
 }
