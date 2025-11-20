@@ -1,6 +1,7 @@
 using HumanCron.Models.Internal;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.RegularExpressions;
 using HumanCron.Abstractions;
 using HumanCron.Models;
@@ -66,11 +67,102 @@ internal sealed partial class NaturalLanguageParser : IScheduleParser
     private static partial Regex MonthListPattern();
 
     /// <summary>
-    /// Day-of-month patterns: "on 15", "on 1", "on 31"
+    /// Combined month and day patterns: "on january 1st", "on dec 25th", "on april 15th"
+    /// Natural syntax for specifying both month and day-of-month together
+    /// </summary>
+    [GeneratedRegex(@"on\s+(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s+(\d{1,2})(?:st|nd|rd|th)?", RegexOptions.IgnoreCase)]
+    private static partial Regex MonthAndDayPattern();
+
+    /// <summary>
+    /// Day-of-month patterns: "on 15", "on 1", "on 31" or "on the 15th", "on the 1st"
     /// Used with monthly intervals
     /// </summary>
-    [GeneratedRegex(@"on\s+(\d{1,2})", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"on\s+(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)?", RegexOptions.IgnoreCase)]
     private static partial Regex DayOfMonthPattern();
+
+    /// <summary>
+    /// Minute list patterns: "at minutes 0,15,30,45" or "at minutes 0-2,4,6-8"
+    /// </summary>
+    [GeneratedRegex(@"at\s+minutes\s+([\d,\-/]+)", RegexOptions.IgnoreCase)]
+    private static partial Regex MinuteListPattern();
+
+    /// <summary>
+    /// Hour list patterns: "at hours 9,12,15,18" or "at hours 9-17"
+    /// </summary>
+    [GeneratedRegex(@"at\s+hours\s+([\d,\-/]+)", RegexOptions.IgnoreCase)]
+    private static partial Regex HourListPattern();
+
+    /// <summary>
+    /// Day list patterns: "on the 1st, 15th, and 30th" or "on the 1st,15th,30th"
+    /// </summary>
+    [GeneratedRegex(@"on\s+the\s+([\d,\s]+(st|nd|rd|th)[,\s]*)+", RegexOptions.IgnoreCase)]
+    private static partial Regex DayListWithOrdinalsPattern();
+
+    /// <summary>
+    /// Minute range patterns: "between minutes 0 and 30"
+    /// </summary>
+    [GeneratedRegex(@"between\s+minutes\s+(\d+)\s+and\s+(\d+)", RegexOptions.IgnoreCase)]
+    private static partial Regex MinuteRangePattern();
+
+    /// <summary>
+    /// Hour range patterns: "between hours 9 and 17"
+    /// </summary>
+    [GeneratedRegex(@"between\s+hours\s+(\d+)\s+and\s+(\d+)", RegexOptions.IgnoreCase)]
+    private static partial Regex HourRangePattern();
+
+    /// <summary>
+    /// Day range patterns with ordinals: "between the 1st and 15th"
+    /// </summary>
+    [GeneratedRegex(@"between\s+the\s+(\d+)(st|nd|rd|th)\s+and\s+(\d+)(st|nd|rd|th)", RegexOptions.IgnoreCase)]
+    private static partial Regex DayRangeWithOrdinalsPattern();
+
+    /// <summary>
+    /// Range+step patterns: "every 5 minutes between 0 and 30 of each hour"
+    /// </summary>
+    [GeneratedRegex(@"every\s+(\d+)\s+(minutes?|hours?|days?)\s+between\s+(?:the\s+)?(\d+)(?:st|nd|rd|th)?\s+and\s+(?:the\s+)?(\d+)(?:st|nd|rd|th)?\s+of\s+each\s+(hour|day|month)", RegexOptions.IgnoreCase)]
+    private static partial Regex RangeStepPattern();
+
+    /// <summary>
+    /// Year constraint patterns: "in year 2025"
+    /// </summary>
+    [GeneratedRegex(@"in\s+year\s+(\d{4})", RegexOptions.IgnoreCase)]
+    private static partial Regex YearPattern();
+
+    /// <summary>
+    /// Last day patterns: "last day", "last day of month"
+    /// </summary>
+    [GeneratedRegex(@"(?:on\s+)?last\s+day(?:\s+of\s+month)?", RegexOptions.IgnoreCase)]
+    private static partial Regex LastDayPattern();
+
+    /// <summary>
+    /// Last weekday pattern: "last weekday"
+    /// </summary>
+    [GeneratedRegex(@"(?:on\s+)?last\s+weekday", RegexOptions.IgnoreCase)]
+    private static partial Regex LastWeekdayPattern();
+
+    /// <summary>
+    /// Last day-of-week patterns: "last monday", "last friday"
+    /// </summary>
+    [GeneratedRegex(@"(?:on\s+)?last\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun)", RegexOptions.IgnoreCase)]
+    private static partial Regex LastDayOfWeekPattern();
+
+    /// <summary>
+    /// Last day offset patterns: "3rd to last day", "day before last"
+    /// </summary>
+    [GeneratedRegex(@"(?:on\s+)?(?:(\d+)(?:st|nd|rd|th)\s+to\s+last\s+day|day\s+before\s+last)", RegexOptions.IgnoreCase)]
+    private static partial Regex LastDayOffsetPattern();
+
+    /// <summary>
+    /// Weekday nearest patterns: "weekday nearest 15", "weekday nearest the 15th", "on weekday nearest the 1st"
+    /// </summary>
+    [GeneratedRegex(@"(?:on\s+)?weekday\s+nearest\s+(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)?", RegexOptions.IgnoreCase)]
+    private static partial Regex WeekdayNearestPattern();
+
+    /// <summary>
+    /// Nth occurrence patterns: "1st monday", "3rd friday", "2nd thursday"
+    /// </summary>
+    [GeneratedRegex(@"(?:on\s+)?(\d+)(?:st|nd|rd|th)\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun)", RegexOptions.IgnoreCase)]
+    private static partial Regex NthOccurrencePattern();
 
     // Month name to number mappings (accepts both full names and abbreviations)
     private static readonly Dictionary<string, int> MonthNames = new(StringComparer.OrdinalIgnoreCase)
@@ -101,6 +193,197 @@ internal sealed partial class NaturalLanguageParser : IScheduleParser
         ["sunday"] = DayOfWeek.Sunday, ["sun"] = DayOfWeek.Sunday
     };
 
+    /// <summary>
+    /// Parse ordinal strings like "1st", "2nd", "3rd", "15th" to integers
+    /// </summary>
+    private static int? ParseOrdinal(string ordinalStr)
+    {
+        if (string.IsNullOrWhiteSpace(ordinalStr))
+        {
+            return null;
+        }
+
+        // Strip ordinal suffix (st, nd, rd, th) - case insensitive
+        var numberStr = Regex.Replace(ordinalStr.Trim(), @"(st|nd|rd|th)$", "", RegexOptions.IgnoreCase);
+        return int.TryParse(numberStr, out var num) ? num : null;
+    }
+
+    /// <summary>
+    /// Parse a list/range notation like "0,15,30,45" or "0-2,4,6-8" into individual values
+    /// Similar to UnixCronParser.ParseList but for natural language input
+    /// </summary>
+    private static IReadOnlyList<int>? ParseListNotation(string notation, int minValue, int maxValue)
+    {
+        if (string.IsNullOrWhiteSpace(notation))
+        {
+            return null;
+        }
+
+        var parts = notation.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var values = new List<int>();
+
+        foreach (var part in parts)
+        {
+            // Check if this part is a range (e.g., "0-4")
+            if (part.Contains('-') && !part.StartsWith("-"))
+            {
+                var rangeParts = part.Split('-', StringSplitOptions.RemoveEmptyEntries);
+                if (rangeParts.Length == 2 &&
+                    int.TryParse(rangeParts[0], out var start) &&
+                    int.TryParse(rangeParts[1], out var end) &&
+                    start <= end &&
+                    start >= minValue && end <= maxValue)
+                {
+                    // Expand range: 0-4 → [0, 1, 2, 3, 4]
+                    for (var i = start; i <= end; i++)
+                    {
+                        values.Add(i);
+                    }
+                }
+            }
+            // Single value
+            else if (int.TryParse(part, out var value) && value >= minValue && value <= maxValue)
+            {
+                values.Add(value);
+            }
+        }
+
+        return values.Count >= 1 ? values.Distinct().OrderBy(v => v).ToList() : null;
+    }
+
+    /// <summary>
+    /// Parse ordinal list like "1st, 15th, and 30th" to list of integers
+    /// </summary>
+    private static IReadOnlyList<int>? ParseOrdinalList(string ordinalList)
+    {
+        if (string.IsNullOrWhiteSpace(ordinalList))
+        {
+            return null;
+        }
+
+        // Match all ordinals in the string (e.g., "1st", "15th", "30th")
+        var ordinalMatches = Regex.Matches(ordinalList, @"(\d+)(st|nd|rd|th)", RegexOptions.IgnoreCase);
+        var values = new List<int>();
+
+        foreach (Match match in ordinalMatches)
+        {
+            var ordinal = ParseOrdinal(match.Value);
+            if (ordinal is >= 1 and <= 31)
+            {
+                values.Add(ordinal.Value);
+            }
+        }
+
+        return values.Count >= 1 ? values.Distinct().OrderBy(v => v).ToList() : null;
+    }
+
+    /// <summary>
+    /// Parse range+step patterns: "every 5 minutes between 0 and 30 of each hour"
+    /// Regex groups: (1)=step (2)=unit (3)=start (4)=end (5)=scope
+    /// </summary>
+    private ParseResult<ScheduleSpec> ParseRangeStepPattern(Match match, string fullInput, ScheduleParserOptions options)
+    {
+        // Extract values from regex
+        var step = int.Parse(match.Groups[1].Value);
+        var unitStr = match.Groups[2].Value.ToLowerInvariant();
+        var rangeStart = int.Parse(match.Groups[3].Value);
+        var rangeEnd = int.Parse(match.Groups[4].Value);
+        var scopeStr = match.Groups[5].Value.ToLowerInvariant();
+
+        // Determine unit from step unit string
+        var unit = unitStr switch
+        {
+            "minute" or "minutes" => IntervalUnit.Minutes,
+            "hour" or "hours" => IntervalUnit.Hours,
+            "day" or "days" => IntervalUnit.Days,
+            _ => throw new InvalidOperationException($"Unknown unit: {unitStr}")
+        };
+
+        // Build ScheduleSpec based on the unit
+        var spec = new ScheduleSpec
+        {
+            Interval = step,
+            Unit = unit,
+            TimeZone = options.TimeZone
+        };
+
+        spec = unit switch
+        {
+            // Set range fields based on unit
+            IntervalUnit.Minutes => spec with { MinuteStart = rangeStart, MinuteEnd = rangeEnd, MinuteStep = step },
+            IntervalUnit.Hours => spec with { HourStart = rangeStart, HourEnd = rangeEnd, HourStep = step },
+            IntervalUnit.Days => spec with { DayStart = rangeStart, DayEnd = rangeEnd, DayStep = step },
+            _ => spec
+        };
+
+        // Extract month specifier (from full input, not just the match)
+        var monthSpecifier = ExtractMonthSpecifier(fullInput);
+        spec = spec with { Month = monthSpecifier };
+
+        // Extract year constraint (from full input)
+        var yearMatch = YearPattern().Match(fullInput);
+        if (!yearMatch.Success) return new ParseResult<ScheduleSpec>.Success(spec);
+        var year = int.Parse(yearMatch.Groups[1].Value);
+        spec = spec with { Year = year };
+
+        return new ParseResult<ScheduleSpec>.Success(spec);
+    }
+
+    /// <summary>
+    /// Extract month specifier from input string (helper for various parse methods)
+    /// </summary>
+    private MonthSpecifier ExtractMonthSpecifier(string input)
+    {
+        // Check for month list first (highest priority: "in jan,apr,jul,oct")
+        var monthListMatch = MonthListPattern().Match(input);
+        if (monthListMatch.Success)
+        {
+            var monthListString = monthListMatch.Groups[1].Value;
+            var monthStrings = monthListString.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+            List<int> months = [];
+            foreach (var monthStr in monthStrings)
+            {
+                if (MonthNames.TryGetValue(monthStr, out var monthNum))
+                {
+                    months.Add(monthNum);
+                }
+            }
+
+            if (months.Count >= 2)
+            {
+                return new MonthSpecifier.List(months);
+            }
+        }
+
+        // Check for month range (medium priority: "between january and march")
+        var monthRangeMatch = MonthRangePattern().Match(input);
+        if (monthRangeMatch.Success)
+        {
+            var startMonth = monthRangeMatch.Groups[1].Value;
+            var endMonth = monthRangeMatch.Groups[2].Value;
+
+            if (MonthNames.TryGetValue(startMonth, out var startMonthNum) &&
+                MonthNames.TryGetValue(endMonth, out var endMonthNum))
+            {
+                return new MonthSpecifier.Range(startMonthNum, endMonthNum);
+            }
+        }
+
+        // Check for single month (lowest priority: "in january")
+        var monthMatch = SpecificMonthPattern().Match(input);
+        if (!monthMatch.Success) return new MonthSpecifier.None();
+        {
+            var monthString = monthMatch.Groups[1].Value;
+            if (MonthNames.TryGetValue(monthString, out var monthNum))
+            {
+                return new MonthSpecifier.Single(monthNum);
+            }
+        }
+
+        return new MonthSpecifier.None();
+    }
+
     public ParseResult<ScheduleSpec> Parse(string naturalLanguage, ScheduleParserOptions options)
     {
         if (string.IsNullOrWhiteSpace(naturalLanguage))
@@ -110,10 +393,21 @@ internal sealed partial class NaturalLanguageParser : IScheduleParser
 
         var input = naturalLanguage.Trim();
 
-        // Validate "every" is present (required for all patterns)
-        if (!input.StartsWith("every", StringComparison.OrdinalIgnoreCase))
+        // Check if this is an "on" pattern (for advanced Quartz features with months)
+        var isOnPattern = input.StartsWith("on ", StringComparison.OrdinalIgnoreCase);
+
+        // Validate "every" or "on" is present
+        if (!input.StartsWith("every", StringComparison.OrdinalIgnoreCase) && !isOnPattern)
         {
-            return new ParseResult<ScheduleSpec>.Error("All schedules must start with 'every'. For example: 'every 30 minutes', 'every day', 'every monday'");
+            return new ParseResult<ScheduleSpec>.Error("All schedules must start with 'every' or 'on'. For example: 'every 30 minutes', 'every day', 'on last day in january'");
+        }
+
+        // Check for range+step pattern FIRST (highest priority, most specific)
+        // "every 5 minutes between 0 and 30 of each hour"
+        var rangeStepMatch = RangeStepPattern().Match(input);
+        if (rangeStepMatch.Success)
+        {
+            return ParseRangeStepPattern(rangeStepMatch, input, options);
         }
 
         // Check for specific day patterns first (e.g., "every monday", "every weekday")
@@ -123,7 +417,7 @@ internal sealed partial class NaturalLanguageParser : IScheduleParser
         // Extract interval: "every 30 seconds", "every day", or "every monday"
         var intervalMatch = IntervalPattern().Match(input);
 
-        if (!intervalMatch.Success && !specificDayMatch.Success)
+        if (!intervalMatch.Success && !specificDayMatch.Success && !isOnPattern)
         {
             return new ParseResult<ScheduleSpec>.Error($"Unable to parse interval from: {input}. Expected format like 'every 30 minutes', 'every day', or 'every monday'");
         }
@@ -132,7 +426,14 @@ internal sealed partial class NaturalLanguageParser : IScheduleParser
         var interval = 1;
         IntervalUnit unit;
 
-        if (specificDayMatch.Success && !intervalMatch.Success)
+        if (isOnPattern)
+        {
+            // Special case: "on" patterns are implicitly monthly
+            // "on last day in january" = every month on last day in january
+            interval = 1;
+            unit = IntervalUnit.Months;
+        }
+        else if (specificDayMatch.Success && !intervalMatch.Success)
         {
             // Special case: "every monday" - no explicit interval, defaults to weekly
             interval = 1;
@@ -150,31 +451,32 @@ internal sealed partial class NaturalLanguageParser : IScheduleParser
                 }
             }
 
-            // Validate interval is positive
-            if (interval <= 0)
+            switch (interval)
             {
-                return new ParseResult<ScheduleSpec>.Error("Interval must be a positive number (1 or greater)");
+                // Validate interval is positive
+                case <= 0:
+                    return new ParseResult<ScheduleSpec>.Error("Interval must be a positive number (1 or greater)");
+                // Validate interval has reasonable upper bound
+                case > 1000:
+                    return new ParseResult<ScheduleSpec>.Error($"Interval too large: {interval}. Maximum allowed is 1000.");
+                default:
+                {
+                    // Parse unit from full word
+                    var unitString = intervalMatch.Groups[2].Value.ToLowerInvariant();
+                    unit = unitString switch
+                    {
+                        "second" or "seconds" => IntervalUnit.Seconds,
+                        "minute" or "minutes" => IntervalUnit.Minutes,
+                        "hour" or "hours" => IntervalUnit.Hours,
+                        "day" or "days" => IntervalUnit.Days,
+                        "week" or "weeks" => IntervalUnit.Weeks,
+                        "month" or "months" => IntervalUnit.Months,
+                        "year" or "years" => IntervalUnit.Years,
+                        _ => throw new InvalidOperationException($"Unknown unit: {unitString}")
+                    };
+                    break;
+                }
             }
-
-            // Validate interval has reasonable upper bound
-            if (interval > 1000)
-            {
-                return new ParseResult<ScheduleSpec>.Error($"Interval too large: {interval}. Maximum allowed is 1000.");
-            }
-
-            // Parse unit from full word
-            var unitString = intervalMatch.Groups[2].Value.ToLowerInvariant();
-            unit = unitString switch
-            {
-                "second" or "seconds" => IntervalUnit.Seconds,
-                "minute" or "minutes" => IntervalUnit.Minutes,
-                "hour" or "hours" => IntervalUnit.Hours,
-                "day" or "days" => IntervalUnit.Days,
-                "week" or "weeks" => IntervalUnit.Weeks,
-                "month" or "months" => IntervalUnit.Months,
-                "year" or "years" => IntervalUnit.Years,
-                _ => throw new InvalidOperationException($"Unknown unit: {unitString}")
-            };
         }
 
         // Extract time (optional): "at 2pm", "at 14:00", "at 3:30am"
@@ -233,25 +535,137 @@ internal sealed partial class NaturalLanguageParser : IScheduleParser
         DayPattern? dayPattern = null;
         int? dayOfMonth = null;
 
-        // For monthly intervals, "on" means day-of-month (1-31)
+        // Advanced Quartz features
+        var isLastDay = false;
+        var isLastDayOfWeek = false;
+        int? lastDayOffset = null;
+        var isNearestWeekday = false;
+        int? nthOccurrence = null;
+
+        // For monthly intervals, "on" means day-of-month (1-31) or advanced features
         if (unit == IntervalUnit.Months || unit == IntervalUnit.Years)
         {
-            var dayOfMonthMatch = DayOfMonthPattern().Match(input);
-            if (dayOfMonthMatch.Success)
-            {
-                var daySpan = dayOfMonthMatch.Groups[1].ValueSpan;
-                if (!int.TryParse(daySpan, out var day))
-                {
-                    return new ParseResult<ScheduleSpec>.Error($"Invalid day of month: {daySpan.ToString()}");
-                }
+            // Check for advanced features first (higher priority)
 
-                // Validate day of month is 1-31
+            // Last weekday: "last weekday"
+            var lastWeekdayMatch = LastWeekdayPattern().Match(input);
+            if (lastWeekdayMatch.Success)
+            {
+                isLastDay = true;
+                isNearestWeekday = true;
+            }
+            // Last day offset: "3rd to last day", "day before last"
+            else if (LastDayOffsetPattern().Match(input) is { Success: true } lastOffsetMatch)
+            {
+                if (lastOffsetMatch.Groups[1].Success)
+                {
+                    // "3rd to last day"
+                    if (!int.TryParse(lastOffsetMatch.Groups[1].ValueSpan, out var offset))
+                    {
+                        return new ParseResult<ScheduleSpec>.Error($"Invalid offset: {lastOffsetMatch.Groups[1].Value}");
+                    }
+                    lastDayOffset = offset;
+                }
+                else
+                {
+                    // "day before last"
+                    lastDayOffset = 1;
+                }
+            }
+            // Last day: "last day", "last day of month"
+            else if (LastDayPattern().Match(input).Success)
+            {
+                isLastDay = true;
+            }
+            // Last day-of-week: "last monday", "last friday"
+            else if (LastDayOfWeekPattern().Match(input) is { Success: true } lastDayOfWeekMatch)
+            {
+                var dayString = lastDayOfWeekMatch.Groups[1].Value;
+                if (!DayNames.TryGetValue(dayString, out var parsedDay))
+                {
+                    return new ParseResult<ScheduleSpec>.Error($"Invalid day: {dayString}");
+                }
+                dayOfWeek = parsedDay;
+                isLastDayOfWeek = true;
+            }
+            // Weekday nearest: "weekday nearest 15"
+            else if (WeekdayNearestPattern().Match(input) is { Success: true } weekdayNearestMatch)
+            {
+                if (!int.TryParse(weekdayNearestMatch.Groups[1].ValueSpan, out var day))
+                {
+                    return new ParseResult<ScheduleSpec>.Error($"Invalid day: {weekdayNearestMatch.Groups[1].Value}");
+                }
                 if (day < 1 || day > 31)
                 {
-                    return new ParseResult<ScheduleSpec>.Error($"Day of month must be 1-31, got: {day}");
+                    return new ParseResult<ScheduleSpec>.Error($"Day for weekday nearest must be 1-31, got: {day}");
+                }
+                dayOfMonth = day;
+                isNearestWeekday = true;
+            }
+            // Nth occurrence: "1st monday", "3rd friday"
+            else if (NthOccurrencePattern().Match(input) is { Success: true } nthMatch)
+            {
+                if (!int.TryParse(nthMatch.Groups[1].ValueSpan, out var nth))
+                {
+                    return new ParseResult<ScheduleSpec>.Error($"Invalid occurrence number: {nthMatch.Groups[1].Value}");
+                }
+                if (nth < 1 || nth > 5)
+                {
+                    return new ParseResult<ScheduleSpec>.Error($"Occurrence number must be 1-5, got: {nth}");
                 }
 
-                dayOfMonth = day;
+                var dayString = nthMatch.Groups[2].Value;
+                if (!DayNames.TryGetValue(dayString, out var parsedDay))
+                {
+                    return new ParseResult<ScheduleSpec>.Error($"Invalid day: {dayString}");
+                }
+
+                nthOccurrence = nth;
+                dayOfWeek = parsedDay;
+            }
+            // Day-of-week pattern: "on monday" (when combined with monthly, e.g., "every month on monday")
+            else if (DayOfWeekPattern().Match(input) is { Success: true } dowMatch)
+            {
+                var dayString = dowMatch.Groups[1].Value.ToLowerInvariant();
+
+                // Check for patterns first
+                if (dayString is "weekday" or "weekdays")
+                {
+                    dayPattern = DayPattern.Weekdays;
+                }
+                else if (dayString is "weekend" or "weekends")
+                {
+                    dayPattern = DayPattern.Weekends;
+                }
+                else if (DayNames.TryGetValue(dayString, out var parsedDay))
+                {
+                    dayOfWeek = parsedDay;
+                }
+                else
+                {
+                    return new ParseResult<ScheduleSpec>.Error($"Invalid day: {dayString}");
+                }
+            }
+            // Regular day-of-month: "on 15"
+            else
+            {
+                var dayOfMonthMatch = DayOfMonthPattern().Match(input);
+                if (dayOfMonthMatch.Success)
+                {
+                    var daySpan = dayOfMonthMatch.Groups[1].ValueSpan;
+                    if (!int.TryParse(daySpan, out var day))
+                    {
+                        return new ParseResult<ScheduleSpec>.Error($"Invalid day of month: {daySpan.ToString()}");
+                    }
+
+                    // Validate day of month is 1-31
+                    if (day < 1 || day > 31)
+                    {
+                        return new ParseResult<ScheduleSpec>.Error($"Day of month must be 1-31, got: {day}");
+                    }
+
+                    dayOfMonth = day;
+                }
             }
         }
         else
@@ -273,19 +687,18 @@ internal sealed partial class NaturalLanguageParser : IScheduleParser
                     return new ParseResult<ScheduleSpec>.Error($"Invalid day name: {endDay}");
                 }
 
-                // Check for recognized day ranges
-                if (startDayOfWeek == DayOfWeek.Monday && endDayOfWeek == DayOfWeek.Friday)
+                switch (startDayOfWeek)
                 {
-                    dayPattern = DayPattern.Weekdays;
-                }
-                else if (startDayOfWeek == DayOfWeek.Saturday && endDayOfWeek == DayOfWeek.Sunday)
-                {
-                    dayPattern = DayPattern.Weekends;
-                }
-                else
-                {
-                    // TODO: Add DayRange support to ScheduleSpec for arbitrary ranges
-                    return new ParseResult<ScheduleSpec>.Error($"Day ranges other than 'between monday and friday' (weekdays) or 'between saturday and sunday' (weekends) are not yet supported. Found: {startDay} to {endDay}");
+                    // Check for recognized day ranges
+                    case DayOfWeek.Monday when endDayOfWeek == DayOfWeek.Friday:
+                        dayPattern = DayPattern.Weekdays;
+                        break;
+                    case DayOfWeek.Saturday when endDayOfWeek == DayOfWeek.Sunday:
+                        dayPattern = DayPattern.Weekends;
+                        break;
+                    default:
+                        // TODO: Add DayRange support to ScheduleSpec for arbitrary ranges
+                        return new ParseResult<ScheduleSpec>.Error($"Day ranges other than 'between monday and friday' (weekdays) or 'between saturday and sunday' (weekends) are not yet supported. Found: {startDay} to {endDay}");
                 }
             }
             else
@@ -339,12 +752,34 @@ internal sealed partial class NaturalLanguageParser : IScheduleParser
             }
         }
 
-        // Extract month specifier (optional)
+        // Check for combined month+day pattern first: "on january 1st", "on dec 25th"
+        // This is more specific than separate month and day patterns
+        var monthAndDayMatch = MonthAndDayPattern().Match(input);
         MonthSpecifier monthSpecifier = new MonthSpecifier.None();
 
+        if (monthAndDayMatch.Success)
+        {
+            var monthString = monthAndDayMatch.Groups[1].Value;
+            var dayString = monthAndDayMatch.Groups[2].Value;
+
+            if (!MonthNames.TryGetValue(monthString, out var monthNum))
+            {
+                return new ParseResult<ScheduleSpec>.Error($"Invalid month name: {monthString}");
+            }
+
+            if (!int.TryParse(dayString, out var day) || day < 1 || day > 31)
+            {
+                return new ParseResult<ScheduleSpec>.Error($"Invalid day of month: {dayString}. Must be 1-31.");
+            }
+
+            monthSpecifier = new MonthSpecifier.Single(monthNum);
+            dayOfMonth = day;
+        }
+
+        // Extract month specifier (optional) if not already set by combined pattern
         // Check for month list first (highest priority: "in jan,apr,jul,oct")
         var monthListMatch = MonthListPattern().Match(input);
-        if (monthListMatch.Success)
+        if (!monthAndDayMatch.Success && monthListMatch.Success)
         {
             var monthListString = monthListMatch.Groups[1].Value;
             var monthStrings = monthListString.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -366,7 +801,7 @@ internal sealed partial class NaturalLanguageParser : IScheduleParser
 
             monthSpecifier = new MonthSpecifier.List(months);
         }
-        else
+        else if (!monthAndDayMatch.Success)
         {
             // Check for month range (medium priority: "between january and march")
             var monthRangeMatch = MonthRangePattern().Match(input);
@@ -414,6 +849,77 @@ internal sealed partial class NaturalLanguageParser : IScheduleParser
         // "every month on 15 in january,april,july,october" = 15th of specific months
         // This maps to cron: "0 0 15 1,4,7,10 *"
 
+        // Extract minute/hour/day lists and ranges
+        IReadOnlyList<int>? minuteList = null;
+        int? minuteStart = null, minuteEnd = null;
+        IReadOnlyList<int>? hourList = null;
+        int? hourStart = null, hourEnd = null;
+        IReadOnlyList<int>? dayList = null;
+        int? dayStart = null, dayEnd = null;
+        int? year = null;
+
+        // Minute list: "at minutes 0,15,30,45" or "at minutes 0-2,4,6-8"
+        var minuteListMatch = MinuteListPattern().Match(input);
+        if (minuteListMatch.Success)
+        {
+            var notation = minuteListMatch.Groups[1].Value;
+            minuteList = ParseListNotation(notation, 0, 59);
+        }
+        // Minute range: "between minutes 0 and 30"
+        else
+        {
+            var minuteRangeMatch = MinuteRangePattern().Match(input);
+            if (minuteRangeMatch.Success)
+            {
+                minuteStart = int.Parse(minuteRangeMatch.Groups[1].Value);
+                minuteEnd = int.Parse(minuteRangeMatch.Groups[2].Value);
+            }
+        }
+
+        // Hour list: "at hours 9,12,15,18"
+        var hourListMatch = HourListPattern().Match(input);
+        if (hourListMatch.Success)
+        {
+            var notation = hourListMatch.Groups[1].Value;
+            hourList = ParseListNotation(notation, 0, 23);
+        }
+        // Hour range: "between hours 9 and 17"
+        else
+        {
+            var hourRangeMatch = HourRangePattern().Match(input);
+            if (hourRangeMatch.Success)
+            {
+                hourStart = int.Parse(hourRangeMatch.Groups[1].Value);
+                hourEnd = int.Parse(hourRangeMatch.Groups[2].Value);
+            }
+        }
+
+        // Day list with ordinals: "on the 1st, 15th, and 30th"
+        var dayListMatch = DayListWithOrdinalsPattern().Match(input);
+        if (dayListMatch.Success)
+        {
+            dayList = ParseOrdinalList(dayListMatch.Value);
+        }
+        // Day range with ordinals: "between the 1st and 15th"
+        else
+        {
+            var dayRangeMatch = DayRangeWithOrdinalsPattern().Match(input);
+            if (dayRangeMatch.Success)
+            {
+                var startOrdinal = dayRangeMatch.Groups[1].Value + dayRangeMatch.Groups[2].Value;
+                var endOrdinal = dayRangeMatch.Groups[3].Value + dayRangeMatch.Groups[4].Value;
+                dayStart = ParseOrdinal(startOrdinal);
+                dayEnd = ParseOrdinal(endOrdinal);
+            }
+        }
+
+        // Year constraint: "in year 2025"
+        var yearMatch = YearPattern().Match(input);
+        if (yearMatch.Success)
+        {
+            year = int.Parse(yearMatch.Groups[1].Value);
+        }
+
         // Validate DayOfWeek and DayPattern are mutually exclusive (should not happen due to parsing logic, but defensive check)
         if (dayOfWeek.HasValue && dayPattern.HasValue)
         {
@@ -430,7 +936,22 @@ internal sealed partial class NaturalLanguageParser : IScheduleParser
             DayOfMonth = dayOfMonth,
             Month = monthSpecifier,
             TimeOfDay = timeOfDay,
-            TimeZone = options.TimeZone
+            TimeZone = options.TimeZone,
+            IsLastDay = isLastDay,
+            IsLastDayOfWeek = isLastDayOfWeek,
+            LastDayOffset = lastDayOffset,
+            IsNearestWeekday = isNearestWeekday,
+            NthOccurrence = nthOccurrence,
+            MinuteList = minuteList,
+            MinuteStart = minuteStart,
+            MinuteEnd = minuteEnd,
+            HourList = hourList,
+            HourStart = hourStart,
+            HourEnd = hourEnd,
+            DayList = dayList,
+            DayStart = dayStart,
+            DayEnd = dayEnd,
+            Year = year
         });
     }
 }

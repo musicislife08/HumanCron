@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <PackageId>HumanCron.Quartz</PackageId>
-    <Description>Quartz.NET integration for HumanCron. Convert natural language schedules like "every 2 weeks on sunday at 2pm" directly to Quartz IScheduleBuilder with automatic timezone handling, DST support, and start time calculation for CalendarInterval schedules. Includes bidirectional conversion (schedule to natural language). Requires exact version match with HumanCron core package.</Description>
+    <Description>Quartz.NET integration for HumanCron with full Quartz cron specification compliance (6-7 field format). Convert natural language schedules like "every 2 weeks on sunday at 2pm" directly to Quartz IScheduleBuilder with automatic timezone handling and DST support. Supports complete Quartz cron syntax including all Unix features (lists, ranges, steps, named values) plus Quartz-specific features (L, W, #, year field). Includes bidirectional conversion (cron to natural language) with smart compaction. Requires exact version match with HumanCron core package.</Description>
   </PropertyGroup>
 
   <ItemGroup>

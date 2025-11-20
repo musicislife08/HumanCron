@@ -77,6 +77,120 @@ internal sealed record ScheduleSpec
     /// </summary>
     public MonthSpecifier Month { get; init; } = new MonthSpecifier.None();
 
+    // Quartz-specific advanced features (L, W, # characters)
+
+    /// <summary>
+    /// Last day of month (L in day field)
+    /// "every month on last day" → IsLastDay = true
+    /// Generates: "L" in day field
+    /// </summary>
+    public bool IsLastDay { get; init; }
+
+    /// <summary>
+    /// Last occurrence of day-of-week (L in day-of-week field)
+    /// "every month on last friday" → IsLastDayOfWeek = true, DayOfWeek = Friday
+    /// Generates: "6L" (6 = Friday in Quartz)
+    /// </summary>
+    public bool IsLastDayOfWeek { get; init; }
+
+    /// <summary>
+    /// Offset from last day (L-N in day field)
+    /// "3rd to last day" or "day before last" → LastDayOffset = 3 or 1
+    /// Generates: "L-3" or "L-1"
+    /// </summary>
+    public int? LastDayOffset { get; init; }
+
+    /// <summary>
+    /// Nearest weekday to specified day (W in day field)
+    /// "every month on weekday nearest 15" → IsNearestWeekday = true, DayOfMonth = 15
+    /// Generates: "15W"
+    /// Special case: "last weekday" → IsLastDay = true, IsNearestWeekday = true → "LW"
+    /// </summary>
+    public bool IsNearestWeekday { get; init; }
+
+    /// <summary>
+    /// Nth occurrence of day-of-week (# in day-of-week field)
+    /// "3rd friday" → NthOccurrence = 3, DayOfWeek = Friday
+    /// Generates: "6#3" (6 = Friday in Quartz)
+    /// Valid range: 1-5 (1st through 5th occurrence)
+    /// </summary>
+    public int? NthOccurrence { get; init; }
+
+    // Range and list support for minute, hour, and day fields
+    // Used for cron expressions like "0-30 9-17 1-15 * *" (ranges) and "0,15,30,45 9,12,15 1,15,30 * *" (lists)
+
+    /// <summary>
+    /// Minute range start (0-59) - null if not specified
+    /// Cron: "0-30 * * * *" → MinuteStart = 0, MinuteEnd = 30
+    /// </summary>
+    public int? MinuteStart { get; init; }
+
+    /// <summary>
+    /// Minute range end (0-59) - null if not specified
+    /// Cron: "0-30 * * * *" → MinuteStart = 0, MinuteEnd = 30
+    /// </summary>
+    public int? MinuteEnd { get; init; }
+
+    /// <summary>
+    /// Minute range step (1-59) - null if not specified
+    /// Cron: "0-30/5 * * * *" → MinuteStart = 0, MinuteEnd = 30, MinuteStep = 5
+    /// </summary>
+    public int? MinuteStep { get; init; }
+
+    /// <summary>
+    /// Minute list (0-59) - null if not specified
+    /// Cron: "0,15,30,45 * * * *" → MinuteList = [0, 15, 30, 45]
+    /// </summary>
+    public IReadOnlyList<int>? MinuteList { get; init; }
+
+    /// <summary>
+    /// Hour range start (0-23) - null if not specified
+    /// Cron: "0 9-17 * * *" → HourStart = 9, HourEnd = 17
+    /// </summary>
+    public int? HourStart { get; init; }
+
+    /// <summary>
+    /// Hour range end (0-23) - null if not specified
+    /// Cron: "0 9-17 * * *" → HourStart = 9, HourEnd = 17
+    /// </summary>
+    public int? HourEnd { get; init; }
+
+    /// <summary>
+    /// Hour range step (1-23) - null if not specified
+    /// Cron: "0 9-17/2 * * *" → HourStart = 9, HourEnd = 17, HourStep = 2
+    /// </summary>
+    public int? HourStep { get; init; }
+
+    /// <summary>
+    /// Hour list (0-23) - null if not specified
+    /// Cron: "0 9,12,15,18 * * *" → HourList = [9, 12, 15, 18]
+    /// </summary>
+    public IReadOnlyList<int>? HourList { get; init; }
+
+    /// <summary>
+    /// Day-of-month range start (1-31) - null if not specified
+    /// Cron: "0 0 1-15 * *" → DayStart = 1, DayEnd = 15
+    /// </summary>
+    public int? DayStart { get; init; }
+
+    /// <summary>
+    /// Day-of-month range end (1-31) - null if not specified
+    /// Cron: "0 0 1-15 * *" → DayStart = 1, DayEnd = 15
+    /// </summary>
+    public int? DayEnd { get; init; }
+
+    /// <summary>
+    /// Day-of-month range step (1-31) - null if not specified
+    /// Cron: "0 0 1-15/3 * *" → DayStart = 1, DayEnd = 15, DayStep = 3
+    /// </summary>
+    public int? DayStep { get; init; }
+
+    /// <summary>
+    /// Day-of-month list (1-31) - null if not specified
+    /// Cron: "0 0 1,15,30 * *" → DayList = [1, 15, 30]
+    /// </summary>
+    public IReadOnlyList<int>? DayList { get; init; }
+
     /// <summary>
     /// Time of day (14:00, 03:30) - null if not specified
     /// </summary>
@@ -97,4 +211,11 @@ internal sealed record ScheduleSpec
     /// Use IANA timezone IDs (e.g., "America/New_York", "Europe/London")
     /// </summary>
     public DateTimeZone TimeZone { get; init; } = DateTimeZoneProviders.Tzdb.GetSystemDefault();
+
+    /// <summary>
+    /// Year constraint (1970-2099) - null if not specified
+    /// Quartz-specific: Optional 7th field in cron expression
+    /// Quartz: "0 0 12 * * ? 2025" → Year = 2025 (only run in 2025)
+    /// </summary>
+    public int? Year { get; init; }
 }

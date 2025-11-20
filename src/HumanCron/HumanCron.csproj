@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <PackageId>HumanCron</PackageId>
-    <Description>Human-readable cron expression converter with bidirectional support and timezone awareness. Parse schedules like "every 30 minutes", "every day at 2pm", or "every monday at 9am" into Unix cron expressions and convert back to natural language. Features zero-allocation Span&lt;T&gt; parsing, NodaTime timezone handling with DST support, and comprehensive month selection (single months, ranges, lists).</Description>
+    <Description>Human-readable cron expression converter with full Unix cron specification compliance and bidirectional support. Parse schedules like "every 30 minutes", "every day at 2pm", or "every monday at 9am" into Unix cron expressions and convert back to natural language. Supports complete cron syntax: lists (0,15,30,45), ranges (9-17), steps (*/15, 0-30/5), named values (MON-FRI, JAN-DEC), and mixed syntax. Features smart compaction, zero-allocation Span&lt;T&gt; parsing, NodaTime timezone handling with DST support, and comprehensive month selection.</Description>
   </PropertyGroup>
 
   <ItemGroup>
@@ -14,7 +14,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Cronos" Version="0.8.4" />
+    <PackageReference Include="Cronos" Version="0.11.1" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.0" />
     <PackageReference Include="NodaTime" Version="3.2.2" />
   </ItemGroup>

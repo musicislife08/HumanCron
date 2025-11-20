@@ -41,15 +41,134 @@ internal sealed class NaturalLanguageFormatter : IScheduleFormatter
     {
         ArgumentNullException.ThrowIfNull(spec);
 
+        // Check for range+step pattern first - this completely changes the format
+        // "every 5 minutes between 0 and 30 of each hour"
+        if (spec is { MinuteStart: not null, MinuteEnd: not null, MinuteStep: not null })
+        {
+            return FormatRangeStep(
+                spec.MinuteStep.Value,
+                "minute",
+                spec.MinuteStart.Value,
+                spec.MinuteEnd.Value,
+                "hour",
+                spec);
+        }
+        if (spec is { HourStart: not null, HourEnd: not null, HourStep: not null })
+        {
+            return FormatRangeStep(
+                spec.HourStep.Value,
+                "hour",
+                spec.HourStart.Value,
+                spec.HourEnd.Value,
+                "day",
+                spec);
+        }
+        if (spec is { DayStart: not null, DayEnd: not null, DayStep: not null })
+        {
+            return FormatRangeStep(
+                spec.DayStep.Value,
+                "day",
+                spec.DayStart.Value,
+                spec.DayEnd.Value,
+                "month",
+                spec,
+                useOrdinals: true);
+        }
+
         // Start with "every"
         List<string> parts = ["every"];
 
-        // Add interval + unit (verbose form)
-        var intervalPart = FormatInterval(spec.Interval, spec.Unit);
-        parts.Add(intervalPart);
+        // Special case: "every month ... in january" is logically yearly, not monthly
+        // Instead of "every year", use context-specific patterns that are more natural
+        var effectiveUnit = spec.Unit;
+        var effectiveInterval = spec.Interval;
+        var isMonthlyWithSingleMonth = spec.Unit == IntervalUnit.Months &&
+                                        spec.Interval == 1 &&
+                                        spec.Month is MonthSpecifier.Single;
+
+        // Handle monthly→yearly conversion with special formatting for different constraint types
+        if (isMonthlyWithSingleMonth)
+        {
+            // Monthly + single month = runs once (or few times) per year
+            // Use simplified patterns instead of "every year"
+
+            if (spec is { NthOccurrence: not null, DayOfWeek: not null })
+            {
+                // "on the 3rd friday in january" (runs once per year)
+                // Don't use "every", start with "on the"
+                parts.Clear();
+                var dayName = spec.DayOfWeek.Value.ToString().ToLowerInvariant();
+                parts.Add($"on the {FormatOrdinal(spec.NthOccurrence.Value)} {dayName}");
+                // Will add month later
+            }
+            else if (spec.IsLastDayOfWeek && spec.DayOfWeek.HasValue)
+            {
+                // "on the last friday in january"
+                parts.Clear();
+                var dayName = spec.DayOfWeek.Value.ToString().ToLowerInvariant();
+                parts.Add($"on the last {dayName}");
+                // Will add month later
+            }
+            else if (spec.IsLastDay)
+            {
+                // "on the last day in january"
+                parts.Clear();
+                parts.Add("on the last day");
+                // Will add month later
+            }
+            else if (spec.DayOfWeek.HasValue)
+            {
+                // "every monday in january" (runs ~4-5 times per year)
+                // Use day name instead of "year"
+                parts.Add(spec.DayOfWeek.Value.ToString().ToLowerInvariant());
+                // Will add month later
+            }
+            else if (spec.DayList is { Count: > 0 })
+            {
+                // "on the 1st and 15th in january"
+                // Clear parts so we don't have "every year" prefix
+                // The day list will be formatted by the normal day list handler below
+                parts.Clear();
+                effectiveUnit = IntervalUnit.Years;
+                effectiveInterval = 1;
+            }
+            else if (spec is { DayStart: not null, DayEnd: not null })
+            {
+                // "every day between the 1st and 15th in january"
+                // Use "day" instead of "year"
+                parts.Add("day");
+                // Will add range later
+            }
+            else if (spec.DayOfMonth.HasValue)
+            {
+                // "on january 15th" (will use combined syntax)
+                // Set effective unit for combined month+day syntax check
+                effectiveUnit = IntervalUnit.Years;
+                effectiveInterval = 1;
+            }
+            else
+            {
+                // Fallback: use yearly
+                effectiveUnit = IntervalUnit.Years;
+                effectiveInterval = 1;
+            }
+        }
+
+        // Add interval + unit (verbose form) only if not already handled above
+        // Check both that parts.Count == 1 AND that the single element is "every"
+        // (because monthly→yearly conversion may have cleared parts and added a custom pattern)
+        if (parts.Count == 1 && parts[0] == "every") // Still just ["every"]
+        {
+            var intervalPart = FormatInterval(effectiveInterval, effectiveUnit);
+            parts.Add(intervalPart);
+        }
 
         // Add day-of-week constraint (e.g., "every monday" or "between monday and friday")
-        if (spec.DayOfWeek.HasValue)
+        // Skip if already handled in monthly→yearly conversion above
+        // Exception: Don't replace interval if NthOccurrence or IsLastDayOfWeek is set
+        // because those need "every month on 3rd friday" not "every friday on 3rd friday"
+        if (!isMonthlyWithSingleMonth && // NEW: Skip if already handled
+            spec is { DayOfWeek: not null, NthOccurrence: null, IsLastDayOfWeek: false })
         {
             // No "on" prefix for specific days when using "every" already
             // "every monday" not "every on monday"
@@ -65,24 +184,174 @@ internal sealed class NaturalLanguageFormatter : IScheduleFormatter
         // Note: Currently only weekdays (mon-fri) is supported, which maps to DayPattern.Weekdays above
         // Future: Add DayRange support when needed
 
+        // Add day-of-month constraint - check for advanced Quartz features first
+
+        // Last weekday: "on last weekday"
+        if (spec is { IsLastDay: true, IsNearestWeekday: true })
+        {
+            parts.Add("on last weekday");
+        }
+        // Last day offset: "on 3rd to last day" or "on day before last"
+        else if (spec.LastDayOffset.HasValue)
+        {
+            parts.Add(spec.LastDayOffset.Value == 1
+                ? "on day before last"
+                : $"on {FormatOrdinal(spec.LastDayOffset.Value)} to last day");
+        }
+        // Last day: "on last day"
+        // Skip if already handled in monthly+single month block
+        else if (spec.IsLastDay && !isMonthlyWithSingleMonth)
+        {
+            parts.Add("on last day");
+        }
+        // Last occurrence of day-of-week: "on last friday"
+        // Skip if already handled in monthly+single month block
+        else if (spec is { IsLastDayOfWeek: true, DayOfWeek: not null } && !isMonthlyWithSingleMonth)
+        {
+            var dayName = spec.DayOfWeek.Value.ToString().ToLowerInvariant();
+            parts.Add($"on last {dayName}");
+        }
+        // Weekday nearest: "on weekday nearest the 15th"
+        else if (spec is { IsNearestWeekday: true, DayOfMonth: not null })
+        {
+            parts.Add($"on weekday nearest the {FormatOrdinal(spec.DayOfMonth.Value)}");
+        }
+        // Nth occurrence: "on 3rd friday"
+        // Skip if already handled in monthly+single month block
+        else if (spec is { NthOccurrence: not null, DayOfWeek: not null } && !isMonthlyWithSingleMonth)
+        {
+            var dayName = spec.DayOfWeek.Value.ToString().ToLowerInvariant();
+            parts.Add($"on {FormatOrdinal(spec.NthOccurrence.Value)} {dayName}");
+        }
+        // Combined month+day: "on january 1st" (more natural than "on the 1st in january")
+        // Use this for yearly schedules with a single month
+        // Skip if DayList has multiple items (use day list formatter for those)
+        // Use combined syntax if DayList has 0 or 1 items
+        else if (effectiveUnit == IntervalUnit.Years && spec.DayOfMonth.HasValue && spec.Month is MonthSpecifier.Single && (spec.DayList is null or { Count: <= 1 }))
+        {
+            var single = (MonthSpecifier.Single)spec.Month;
+            var monthName = MonthNumberToName[single.Month];
+            parts.Add($"on {monthName} {FormatOrdinal(spec.DayOfMonth.Value)}");
+        }
+        // Day list: "on the 1st, 15th, and 30th" or "on the 1st and 15th"
+        else if (spec.DayList is { Count: > 0 })
+        {
+            var ordinals = spec.DayList.Select(FormatOrdinal).ToList();
+            var dayListStr = ordinals.Count == 2
+                ? string.Join(" and ", ordinals) // "1st and 15th"
+                : string.Join(", ", ordinals); // "1st, 15th, 30th" (or could use Oxford comma)
+            parts.Add($"on the {dayListStr}");
+        }
+        // Day range: "between the 1st and 15th"
+        else if (spec is { DayStart: not null, DayEnd: not null })
+        {
+            parts.Add($"between the {FormatOrdinal(spec.DayStart.Value)} and {FormatOrdinal(spec.DayEnd.Value)}");
+        }
+        // Regular day-of-month: "on the 15th"
+        else if (spec.DayOfMonth.HasValue)
+        {
+            parts.Add($"on the {FormatOrdinal(spec.DayOfMonth.Value)}");
+        }
+
+        // Add time constraints - check for lists/ranges first, then time-of-day
+        // These are mutually exclusive ways of specifying when to run
+
+        // Hour lists/ranges (e.g., "at hours 9,12,15,18" or "between hours 9 and 17")
+        var hasHourListOrRange = false;
+        if (spec.HourList is { Count: > 0 })
+        {
+            var hourListStr = CompactList(spec.HourList);
+            parts.Add($"at hours {hourListStr}");
+            hasHourListOrRange = true;
+        }
+        else if (spec is { HourStart: not null, HourEnd: not null })
+        {
+            parts.Add($"between hours {spec.HourStart.Value} and {spec.HourEnd.Value}");
+            hasHourListOrRange = true;
+        }
+
+        // Minute lists/ranges (e.g., "at minutes 0,15,30,45" or "between minutes 0 and 30")
+        var hasMinuteListOrRange = false;
+        if (spec.MinuteList is { Count: > 0 })
+        {
+            var minuteListStr = CompactList(spec.MinuteList);
+            parts.Add($"at minutes {minuteListStr}");
+            hasMinuteListOrRange = true;
+        }
+        else if (spec is { MinuteStart: not null, MinuteEnd: not null })
+        {
+            parts.Add($"between minutes {spec.MinuteStart.Value} and {spec.MinuteEnd.Value}");
+            hasMinuteListOrRange = true;
+        }
+
+        // Time-of-day constraint (e.g., "at 2pm", "at 14:30")
+        // Only use if no hour/minute lists/ranges are specified
+        if (!hasHourListOrRange && !hasMinuteListOrRange && spec.TimeOfDay.HasValue)
+        {
+            var timePart = FormatTime(spec.TimeOfDay.Value);
+            parts.Add(timePart);
+        }
+
         // Add month specifier (e.g., "in january", "between january and march")
+        // Skip if already included in combined month+day syntax above (yearly schedules)
+        // Don't skip if DayList has multiple items (those need separate month specifier)
+        var skipMonth = effectiveUnit == IntervalUnit.Years && spec.DayOfMonth.HasValue && spec.Month is MonthSpecifier.Single && (spec.DayList is null or { Count: <= 1 });
+        if (spec.Month is not MonthSpecifier.None && !skipMonth)
+        {
+            var monthPart = FormatMonthSpecifier(spec.Month);
+            parts.Add(monthPart);
+        }
+
+        // Add year constraint (e.g., "in year 2025")
+        if (spec.Year.HasValue)
+        {
+            parts.Add($"in year {spec.Year.Value}");
+        }
+
+        return string.Join(" ", parts);
+    }
+
+    /// <summary>
+    /// Format range+step patterns: "every 5 minutes between 0 and 30 of each hour"
+    /// </summary>
+    private static string FormatRangeStep(
+        int step,
+        string stepUnit,
+        int rangeStart,
+        int rangeEnd,
+        string scopeUnit,
+        ScheduleSpec spec,
+        bool useOrdinals = false)
+    {
+        List<string> parts = ["every"];
+
+        // Interval part: "5 minutes" or "2 hours"
+        var unitName = step == 1 ? stepUnit : $"{stepUnit}s";
+        var intervalPart = step == 1 ? unitName : $"{step} {unitName}";
+        parts.Add(intervalPart);
+
+        // Range part: "between 0 and 30" or "between the 1st and 15th"
+        var startStr = useOrdinals ? FormatOrdinal(rangeStart) : rangeStart.ToString();
+        var endStr = useOrdinals ? FormatOrdinal(rangeEnd) : rangeEnd.ToString();
+        var betweenPart = useOrdinals
+            ? $"between the {startStr} and {endStr}"
+            : $"between {startStr} and {endStr}";
+        parts.Add(betweenPart);
+
+        // Scope part: "of each hour" or "of each day" or "of each month"
+        parts.Add($"of each {scopeUnit}");
+
+        // Add month specifier if present
         if (spec.Month is not MonthSpecifier.None)
         {
             var monthPart = FormatMonthSpecifier(spec.Month);
             parts.Add(monthPart);
         }
 
-        // Add day-of-month constraint (e.g., "on 15")
-        if (spec.DayOfMonth.HasValue)
+        // Add year constraint if present
+        if (spec.Year.HasValue)
         {
-            parts.Add($"on {spec.DayOfMonth.Value}");
-        }
-
-        // Add time-of-day constraint (e.g., "at 2pm", "at 14:30")
-        if (spec.TimeOfDay.HasValue)
-        {
-            var timePart = FormatTime(spec.TimeOfDay.Value);
-            parts.Add(timePart);
+            parts.Add($"in year {spec.Year.Value}");
         }
 
         return string.Join(" ", parts);
@@ -135,5 +404,69 @@ internal sealed class NaturalLanguageFormatter : IScheduleFormatter
         {
             return $"at {time:HH:mm}";
         }
+    }
+
+    /// <summary>
+    /// Format a number as an ordinal (1st, 2nd, 3rd, 15th, 21st, etc.)
+    /// </summary>
+    private static string FormatOrdinal(int number)
+    {
+        // Special cases: 11th, 12th, 13th (not 11st, 12nd, 13rd)
+        return number switch
+        {
+            11 or 12 or 13 => $"{number}th",
+            _ when number % 10 == 1 => $"{number}st",
+            _ when number % 10 == 2 => $"{number}nd",
+            _ when number % 10 == 3 => $"{number}rd",
+            _ => $"{number}th"
+        };
+    }
+
+    /// <summary>
+    /// Compact a list of values by converting consecutive sequences to ranges
+    /// Example: [0,1,2,3,4,8,9,10,11,12,20] → "0-4,8-12,20"
+    /// Sequences of 3+ consecutive values are converted to ranges for compactness
+    /// </summary>
+    private static string CompactList(IReadOnlyList<int> values)
+    {
+        if (values.Count == 0)
+        {
+            return "*";
+        }
+
+        var parts = new List<string>();
+        var i = 0;
+
+        while (i < values.Count)
+        {
+            var start = values[i];
+            var end = start;
+
+            // Find consecutive sequence
+            while (i + 1 < values.Count && values[i + 1] == end + 1)
+            {
+                i++;
+                end = values[i];
+            }
+
+            // Use range notation for 3+ consecutive values, otherwise list individual values
+            var sequenceLength = end - start + 1;
+            if (sequenceLength >= 3)
+            {
+                parts.Add($"{start}-{end}");
+            }
+            else
+            {
+                // Add individual values (1 or 2 consecutive values)
+                for (var j = start; j <= end; j++)
+                {
+                    parts.Add(j.ToString());
+                }
+            }
+
+            i++;
+        }
+
+        return string.Join(",", parts);
     }
 }

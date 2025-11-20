@@ -11,6 +11,7 @@ HumanCron is a natural language schedule parser with Quartz.NET integration. It 
 ✅ **Day-of-Week**: "every monday", "every sunday at 2pm"
 ✅ **Day Patterns**: "every weekday", "every weekend"
 ✅ **Day-of-Month**: "every month on 15" (with monthly/yearly intervals)
+✅ **Combined Month + Day**: "on january 1st", "on december 25th" (NEW in v0.3.0 - more natural syntax)
 ✅ **Multi-Week with Day-of-Week**: "every 2 weeks on sunday" (calculates aligned start time)
 ✅ **Monthly with Day-of-Month**: "every 3 months on 15 at 2pm"
 ✅ **Timezone Support**: All schedules respect timezone configuration
@@ -431,6 +432,16 @@ public class DynamicJobScheduler
         await _scheduler.ScheduleJob(trigger);
     }
 }
+
+// Example usage with combined month+day syntax
+var config = new JobConfiguration
+{
+    JobName = "new-year-job",
+    Schedule = "every month on january 1st at 1am"  // NEW v0.3.0 - combined syntax
+};
+
+await scheduler.ScheduleJobAsync(config);
+// Creates job that runs on January 1st at 1am every year
 ```
 
 ## Error Handling

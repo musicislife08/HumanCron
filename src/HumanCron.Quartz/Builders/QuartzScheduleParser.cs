@@ -64,14 +64,11 @@ internal sealed class QuartzScheduleParser : IQuartzScheduleParser
         var result = _cronParser.Parse(cronExpression);
 
         // Apply timezone (convert BCL → NodaTime)
-        if (result is ParseResult<ScheduleSpec>.Success success)
-        {
-            var dateTimeZone = TimeZoneConverter.ToDateTimeZone(cronTrigger.TimeZone);
-            var spec = success.Value with { TimeZone = dateTimeZone };
-            return new ParseResult<ScheduleSpec>.Success(spec);
-        }
+        if (result is not ParseResult<ScheduleSpec>.Success success) return result;
+        var dateTimeZone = TimeZoneConverter.ToDateTimeZone(cronTrigger.TimeZone);
+        var spec = success.Value with { TimeZone = dateTimeZone };
+        return new ParseResult<ScheduleSpec>.Success(spec);
 
-        return result;
     }
 
     private ParseResult<ScheduleSpec> ParseCalendarIntervalTrigger(ICalendarIntervalTrigger calendarTrigger)

@@ -127,7 +127,35 @@ on 31              → 31st (skips months with fewer days)
 
 ### 4. Month Specifier (Optional - NEW in v2.0)
 
-**Format:** `in <month>`, `between <month> and <month>`, or `in <month-list>`
+**Format:** `in <month>`, `between <month> and <month>`, `in <month-list>`, or combined `on <month> <ordinal>`
+
+#### Combined Month + Day (NEW in v0.3.0)
+
+**Format:** `on <month> <ordinal>` - More natural syntax for specifying both month and day
+
+**Full names (accepted):**
+- `on january 1st`, `on february 14th`, `on december 25th`, `on april 15th`
+
+**Abbreviations (accepted on input):**
+- `on jan 1st`, `on feb 14th`, `on dec 25th`, `on apr 15th`
+
+**Ordinal suffixes** (optional on input):
+- `on january 1` (no suffix) → Same as `on january 1st`
+- `on january 1st`, `on january 2nd`, `on january 3rd`, `on january 15th`
+
+**Examples:**
+```
+on january 1st                  → January 1st (more natural)
+on jan 1st                      → January 1st (abbreviation)
+on december 25th                → December 25th
+on april 15                     → April 15th (suffix optional)
+```
+
+**Advantages over separate syntax:**
+- `on january 1st` (combined) vs `on the 1st in january` (separate)
+- More natural English phrasing
+- Shorter and more readable
+- Preferred output format for formatter
 
 #### Specific Month
 
@@ -312,7 +340,9 @@ second  minute  hour  day-of-month  month  day-of-week  [year]
 | `"every monday in december"` | `0 0 * 12 1` | `0 0 0 ? 12 MON` | **NEW** - Mondays in Dec |
 | `"every monday in december at 9am"` | `0 9 * 12 1` | `0 0 9 ? 12 MON` | **NEW** - Combined |
 | `"between monday and friday"` | `0 0 * * 1-5` | `0 0 0 ? * MON-FRI` | **NEW** - Day range |
-| `"on 15 in march"` | `0 0 15 3 *` | `0 0 0 15 3 ?` | **NEW** - March 15th |
+| `"on january 15th"` | `0 0 15 1 *` | `0 0 0 15 1 ?` | **NEW v0.3.0** - Combined month+day |
+| `"on january 1st at 1am"` | `0 1 1 1 *` | `0 0 1 1 1 ?` | **NEW v0.3.0** - Combined with time |
+| `"on 15 in march"` | `0 0 15 3 *` | `0 0 0 15 3 ?` | **NEW** - March 15th (alternate) |
 | `"on 15 in jan,apr,jul,oct at 9am"` | `0 9 15 1,4,7,10 *` | `0 0 9 15 1,4,7,10 ?` | **NEW** - Quarters |
 
 ---
@@ -516,6 +546,11 @@ private static partial Regex SpecificDayPattern();
 [GeneratedRegex(@"between\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun)\s+and\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun)", RegexOptions.IgnoreCase)]
 private static partial Regex DayRangePattern();
 
+// Combined month and day: on january 1st, on dec 25th, on april 15th (NEW in v0.3.0)
+// This pattern is checked BEFORE separate month/day patterns for priority
+[GeneratedRegex(@"on\s+(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s+(\d{1,2})(?:st|nd|rd|th)?", RegexOptions.IgnoreCase)]
+private static partial Regex MonthAndDayPattern();
+
 // Day of month: on 15, on 1, on 31 (for monthly intervals)
 [GeneratedRegex(@"on\s+(\d{1,2})", RegexOptions.IgnoreCase)]
 private static partial Regex DayOfMonthPattern();
@@ -585,7 +620,21 @@ Quartz:   0 0 9 ? 6-8 MON-FRI
 Meaning:  Weekdays in Jun-Aug at 9am
 ```
 
-### Example 5: `"on 15 in jan,apr,jul,oct at 9am"`
+### Example 5: `"every month on january 1st at 1am"` (NEW in v0.3.0)
+```
+Input:    "every month on january 1st at 1am"
+Interval: every month → Interval=1, Unit=Months
+Time:     at 1am → TimeOfDay=01:00
+Day:      on january 1st → DayOfMonth=1 (from combined pattern)
+Month:    january → Month=1 (from combined pattern)
+Unix:     0 1 1 1 *
+Quartz:   0 0 1 1 1 ?
+Meaning:  January 1st at 1am every year
+Note:     Combined pattern "on january 1st" is parsed as single unit
+          More natural than "on the 1st in january"
+```
+
+### Example 6: `"on 15 in jan,apr,jul,oct at 9am"`
 ```
 Input:    "on 15 in jan,apr,jul,oct at 9am"
 Interval: every month (implied from day-of-month)

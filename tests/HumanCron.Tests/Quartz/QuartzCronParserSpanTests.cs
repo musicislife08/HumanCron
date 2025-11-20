@@ -389,15 +389,15 @@ public class QuartzCronParserSpanTests
         Assert.That(result, Is.TypeOf<ParseResult<ScheduleSpec>.Error>(),
             $"Should reject expression with {partCount} parts");
         var error = (ParseResult<ScheduleSpec>.Error)result;
-        Assert.That(error.Message, Does.Contain("6 parts").IgnoreCase);
+        Assert.That(error.Message, Does.Contain("6 or 7 parts").IgnoreCase);
         Assert.That(error.Message, Does.Contain($"got {partCount}").IgnoreCase);
     }
 
     [Test]
     public void Parse_TooManyParts_ReturnsError()
     {
-        // Arrange - 7 parts (Quartz requires exactly 6)
-        var cronExpression = "0 0 */15 * * * ?";
+        // Arrange - 8 parts (Quartz requires 6 or 7)
+        var cronExpression = "0 0 */15 * * * ? 2025";
 
         // Act
         var result = _parser.Parse(cronExpression);
@@ -405,8 +405,8 @@ public class QuartzCronParserSpanTests
         // Assert
         Assert.That(result, Is.TypeOf<ParseResult<ScheduleSpec>.Error>());
         var error = (ParseResult<ScheduleSpec>.Error)result;
-        Assert.That(error.Message, Does.Contain("6 parts").IgnoreCase);
-        Assert.That(error.Message, Does.Contain("got 7").IgnoreCase);
+        Assert.That(error.Message, Does.Contain("6 or 7 parts").IgnoreCase);
+        Assert.That(error.Message, Does.Contain("got 8").IgnoreCase);
     }
 
     // ========================================
@@ -583,7 +583,7 @@ public class QuartzCronParserSpanTests
 
         // Validate error message quality
         Assert.That(error.Message, Is.Not.Empty);
-        Assert.That(error.Message, Does.Contain("6 parts"),
+        Assert.That(error.Message, Does.Contain("6 or 7 parts"),
             "Should specify expected part count");
         Assert.That(error.Message, Does.Contain("got 5"),
             "Should specify actual part count");
@@ -712,5 +712,145 @@ public class QuartzCronParserSpanTests
             // Parser rejected Unicode whitespace (also acceptable)
             Assert.That(result, Is.TypeOf<ParseResult<ScheduleSpec>.Error>());
         }
+    }
+
+    // ========================================
+    // L (Last) Character Parsing - TDD
+    // ========================================
+
+    /// <summary>
+    /// Tests for parsing L (Last) character in Quartz cron expressions
+    /// Will FAIL until QuartzCronParser supports L
+    /// </summary>
+    [TestCase("0 0 0 L * ?", "last day of month")]
+    [TestCase("0 0 12 L * ?", "last day at noon")]
+    [TestCase("0 30 14 L * ?", "last day at 2:30pm")]
+    [TestCase("0 0 0 L-3 * ?", "3rd-to-last day")]
+    [TestCase("0 0 0 L-1 * ?", "day before last")]
+    [TestCase("0 0 0 LW * ?", "last weekday")]
+    [TestCase("0 0 0 ? * 6L", "last Friday")]
+    [TestCase("0 0 0 ? * 2L", "last Monday")]
+    [TestCase("0 0 0 ? * FRIL", "last Friday (text)")]
+    public void Parse_LCharacter_ParsesCorrectly(string cron, string description)
+    {
+        // Act
+        var result = _parser.Parse(cron);
+
+        // Assert - Will FAIL until L support is added
+        Assert.That(result, Is.TypeOf<ParseResult<ScheduleSpec>.Success>(),
+            $"Should parse L character: '{description}' = {cron}");
+    }
+
+    [TestCase("0 0 0 L 1 ?", "last day of January")]
+    [TestCase("0 0 0 L 12 ?", "last day of December")]
+    [TestCase("0 0 0 L 1,4,7,10 ?", "last day quarterly")]
+    public void Parse_LastDayWithMonth_ParsesCorrectly(string cron, string description)
+    {
+        // Act
+        var result = _parser.Parse(cron);
+
+        // Assert - Will FAIL until L support is added
+        Assert.That(result, Is.TypeOf<ParseResult<ScheduleSpec>.Success>(),
+            $"Should parse: '{description}' = {cron}");
+    }
+
+    [TestCase("0 0 17 ? * 6L", "last Friday at 5pm")]
+    [TestCase("0 0 9 ? * 2L", "last Monday at 9am")]
+    [TestCase("0 0 0 ? 1 6L", "last Friday in January")]
+    public void Parse_LastDayOfWeekWithTime_ParsesCorrectly(string cron, string description)
+    {
+        // Act
+        var result = _parser.Parse(cron);
+
+        // Assert - Will FAIL until L support is added
+        Assert.That(result, Is.TypeOf<ParseResult<ScheduleSpec>.Success>(),
+            $"Should parse: '{description}' = {cron}");
+    }
+
+    // ========================================
+    // W (Weekday) Character Parsing - TDD
+    // ========================================
+
+    /// <summary>
+    /// Tests for parsing W (Weekday) character in Quartz cron expressions
+    /// Will FAIL until QuartzCronParser supports W
+    /// </summary>
+    [TestCase("0 0 0 15W * ?", "weekday nearest 15th")]
+    [TestCase("0 0 0 1W * ?", "weekday nearest 1st")]
+    [TestCase("0 0 0 10W * ?", "weekday nearest 10th")]
+    [TestCase("0 0 0 20W * ?", "weekday nearest 20th")]
+    [TestCase("0 0 0 LW * ?", "last weekday of month")]
+    public void Parse_WCharacter_ParsesCorrectly(string cron, string description)
+    {
+        // Act
+        var result = _parser.Parse(cron);
+
+        // Assert - Will FAIL until W support is added
+        Assert.That(result, Is.TypeOf<ParseResult<ScheduleSpec>.Success>(),
+            $"Should parse W character: '{description}' = {cron}");
+    }
+
+    [TestCase("0 30 14 15W * ?", "weekday nearest 15th at 2:30pm")]
+    [TestCase("0 0 9 1W 1,7 ?", "weekday nearest 1st in Jan/July")]
+    [TestCase("0 0 9 1W 1 ?", "weekday nearest 1st in January")]
+    public void Parse_WeekdayWithTimeAndMonth_ParsesCorrectly(string cron, string description)
+    {
+        // Act
+        var result = _parser.Parse(cron);
+
+        // Assert - Will FAIL until W support is added
+        Assert.That(result, Is.TypeOf<ParseResult<ScheduleSpec>.Success>(),
+            $"Should parse: '{description}' = {cron}");
+    }
+
+    // ========================================
+    // # (Nth Occurrence) Character Parsing - TDD
+    // ========================================
+
+    /// <summary>
+    /// Tests for parsing # (Nth occurrence) character in Quartz cron expressions
+    /// Will FAIL until QuartzCronParser supports #
+    /// </summary>
+    [TestCase("0 0 0 ? * 6#3", "3rd Friday")]
+    [TestCase("0 0 0 ? * 2#1", "1st Monday")]
+    [TestCase("0 0 0 ? * 5#2", "2nd Thursday")]
+    [TestCase("0 0 0 ? * 1#4", "4th Sunday")]
+    [TestCase("0 0 0 ? * FRI#3", "3rd Friday (text)")]
+    [TestCase("0 0 0 ? * MON#1", "1st Monday (text)")]
+    public void Parse_HashCharacter_ParsesCorrectly(string cron, string description)
+    {
+        // Act
+        var result = _parser.Parse(cron);
+
+        // Assert - Will FAIL until # support is added
+        Assert.That(result, Is.TypeOf<ParseResult<ScheduleSpec>.Success>(),
+            $"Should parse # character: '{description}' = {cron}");
+    }
+
+    [TestCase("0 0 12 ? * 6#3", "3rd Friday at noon")]
+    [TestCase("0 0 9 ? 1 2#1", "1st Monday of January at 9am")]
+    [TestCase("0 0 0 ? 1,4,7,10 6#3", "3rd Friday quarterly")]
+    [TestCase("0 0 17 ? * 6#5", "5th Friday at 5pm")]
+    public void Parse_NthOccurrenceWithTimeAndMonth_ParsesCorrectly(string cron, string description)
+    {
+        // Act
+        var result = _parser.Parse(cron);
+
+        // Assert - Will FAIL until # support is added
+        Assert.That(result, Is.TypeOf<ParseResult<ScheduleSpec>.Success>(),
+            $"Should parse: '{description}' = {cron}");
+    }
+
+    [TestCase("0 0 0 ? * 3#2", "2nd Tuesday")]
+    [TestCase("0 0 0 ? * 4#3", "3rd Wednesday")]
+    [TestCase("0 0 0 ? * 7#1", "1st Saturday")]
+    public void Parse_AdditionalNthOccurrences_ParsesCorrectly(string cron, string description)
+    {
+        // Act
+        var result = _parser.Parse(cron);
+
+        // Assert - Will FAIL until # support is added
+        Assert.That(result, Is.TypeOf<ParseResult<ScheduleSpec>.Success>(),
+            $"Should parse: '{description}' = {cron}");
     }
 }

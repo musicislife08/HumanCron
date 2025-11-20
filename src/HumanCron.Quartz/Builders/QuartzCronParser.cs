@@ -2,6 +2,7 @@ using HumanCron.Models.Internal;
 using HumanCron.Models;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using NaturalIntervalUnit = HumanCron.Models.Internal.IntervalUnit;
 
 namespace HumanCron.Quartz;
@@ -20,15 +21,15 @@ internal sealed class QuartzCronParser
         }
 
         // Use Span<T> to parse without allocating substring copies
-        ReadOnlySpan<char> cronSpan = cronExpression.AsSpan();
+        var cronSpan = cronExpression.AsSpan();
 
-        // Parse into parts without allocating (allocate 8 slots to detect invalid expressions with > 6 parts)
+        // Parse into parts without allocating (allocate 8 slots to detect invalid expressions with > 7 parts)
         Span<Range> ranges = stackalloc Range[8];
-        int partCount = cronSpan.Split(ranges, ' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var partCount = cronSpan.Split(ranges, ' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-        if (partCount != 6)
+        if (partCount is < 6 or > 7)
         {
-            return new ParseResult<ScheduleSpec>.Error($"Quartz cron expressions must have 6 parts (got {partCount}). Format: second minute hour day month dayOfWeek");
+            return new ParseResult<ScheduleSpec>.Error($"Quartz cron expressions must have 6 or 7 parts (got {partCount}). Format: second minute hour day month dayOfWeek [year]");
         }
 
         var second = cronSpan[ranges[0]];
@@ -37,6 +38,7 @@ internal sealed class QuartzCronParser
         var day = cronSpan[ranges[3]];
         var month = cronSpan[ranges[4]];
         var dayOfWeek = cronSpan[ranges[5]];
+        var year = partCount == 7 ? cronSpan[ranges[6]] : ReadOnlySpan<char>.Empty;
 
         // Determine interval unit and value based on pattern
         var (interval, unit) = DetermineInterval(second, minute, hour, day, dayOfWeek);
@@ -55,6 +57,17 @@ internal sealed class QuartzCronParser
         // Parse time-of-day if specified
         var timeOfDay = ParseTimeOfDay(second, minute, hour, unit);
 
+        // Parse optional year field (1970-2099)
+        var parsedYear = ParseYear(year);
+
+        // Parse ranges and lists for minute, hour, and day fields
+        var (minuteStart, minuteEnd, minuteStep) = ParseRange(minute);
+        var (hourStart, hourEnd, hourStep) = ParseRange(hour);
+        var (dayStart, dayEnd, dayStep) = ParseRange(day);
+        var minuteList = ParseList(minute, 0, 59);
+        var hourList = ParseList(hour, 0, 23);
+        var dayList = ParseList(day, 1, 31);
+
         var spec = new ScheduleSpec
         {
             Interval = interval,
@@ -62,7 +75,20 @@ internal sealed class QuartzCronParser
             DayOfWeek = parsedDayOfWeek,
             DayPattern = parsedDayPattern,
             Month = parsedMonth,
-            TimeOfDay = timeOfDay
+            TimeOfDay = timeOfDay,
+            Year = parsedYear,
+            MinuteStart = minuteStart,
+            MinuteEnd = minuteEnd,
+            MinuteStep = minuteStep,
+            MinuteList = minuteList,
+            HourStart = hourStart,
+            HourEnd = hourEnd,
+            HourStep = hourStep,
+            HourList = hourList,
+            DayStart = dayStart,
+            DayEnd = dayEnd,
+            DayStep = dayStep,
+            DayList = dayList
         };
 
         return new ParseResult<ScheduleSpec>.Success(spec);
@@ -72,9 +98,9 @@ internal sealed class QuartzCronParser
         ReadOnlySpan<char> second, ReadOnlySpan<char> minute, ReadOnlySpan<char> hour, ReadOnlySpan<char> day, ReadOnlySpan<char> dayOfWeek)
     {
         // Pattern: */30 * * * * ? → Every 30 seconds
-        if (second.StartsWith("*/") || second.SequenceEqual("*"))
+        if (second.StartsWith("*/") || second is "*")
         {
-            if (second.SequenceEqual("*"))
+            if (second is "*")
             {
                 return (1, NaturalIntervalUnit.Seconds);
             }
@@ -83,9 +109,9 @@ internal sealed class QuartzCronParser
         }
 
         // Pattern: 0 */15 * * * ? → Every 15 minutes
-        if (minute.StartsWith("*/") || (minute.SequenceEqual("*") && hour.SequenceEqual("*")))
+        if (minute.StartsWith("*/") || (minute is "*" && hour is "*"))
         {
-            if (minute.SequenceEqual("*"))
+            if (minute is "*")
             {
                 return (1, NaturalIntervalUnit.Minutes);
             }
@@ -94,9 +120,9 @@ internal sealed class QuartzCronParser
         }
 
         // Pattern: 0 0 */6 * * ? → Every 6 hours
-        if (hour.StartsWith("*/") || (hour.SequenceEqual("*") && day.SequenceEqual("*") && dayOfWeek.SequenceEqual("?")))
+        if (hour.StartsWith("*/") || (hour is "*" && day is "*" && dayOfWeek is "?"))
         {
-            if (hour.SequenceEqual("*"))
+            if (hour is "*")
             {
                 return (1, NaturalIntervalUnit.Hours);
             }
@@ -105,7 +131,7 @@ internal sealed class QuartzCronParser
         }
 
         // Pattern: 0 0 14 * * ? → Daily at specific time
-        if (day.SequenceEqual("*") && dayOfWeek.SequenceEqual("?"))
+        if (day is "*" && dayOfWeek is "?")
         {
             return (1, NaturalIntervalUnit.Days);
         }
@@ -118,7 +144,7 @@ internal sealed class QuartzCronParser
         }
 
         // Pattern: 0 0 14 ? * MON → Weekly on Monday
-        if (!dayOfWeek.SequenceEqual("?") && day.SequenceEqual("?"))
+        if (!(dayOfWeek is "?") && day is "?")
         {
             return (1, NaturalIntervalUnit.Weeks);
         }
@@ -129,79 +155,117 @@ internal sealed class QuartzCronParser
 
     private static DayOfWeek? ParseDayOfWeek(ReadOnlySpan<char> dayOfWeekPart)
     {
-        if (dayOfWeekPart.SequenceEqual("?") || dayOfWeekPart.SequenceEqual("*"))
+        if (dayOfWeekPart is "?" || dayOfWeekPart is "*")
         {
             return null;
         }
 
-        // Handle day ranges (MON-FRI, SAT,SUN) - return null, these become DayPattern
+        // Handle day ranges (MON-FRI, 2-6, SAT,SUN) - return null, these become DayPattern
         if (dayOfWeekPart.Contains('-') || dayOfWeekPart.Contains(','))
         {
             return null;
         }
 
-        // Single day - use case-insensitive comparison
-        if (dayOfWeekPart.Equals("SUN", StringComparison.OrdinalIgnoreCase) || dayOfWeekPart.SequenceEqual("1"))
-            return DayOfWeek.Sunday;
-        if (dayOfWeekPart.Equals("MON", StringComparison.OrdinalIgnoreCase) || dayOfWeekPart.SequenceEqual("2"))
-            return DayOfWeek.Monday;
-        if (dayOfWeekPart.Equals("TUE", StringComparison.OrdinalIgnoreCase) || dayOfWeekPart.SequenceEqual("3"))
-            return DayOfWeek.Tuesday;
-        if (dayOfWeekPart.Equals("WED", StringComparison.OrdinalIgnoreCase) || dayOfWeekPart.SequenceEqual("4"))
-            return DayOfWeek.Wednesday;
-        if (dayOfWeekPart.Equals("THU", StringComparison.OrdinalIgnoreCase) || dayOfWeekPart.SequenceEqual("5"))
-            return DayOfWeek.Thursday;
-        if (dayOfWeekPart.Equals("FRI", StringComparison.OrdinalIgnoreCase) || dayOfWeekPart.SequenceEqual("6"))
-            return DayOfWeek.Friday;
-        if (dayOfWeekPart.Equals("SAT", StringComparison.OrdinalIgnoreCase) || dayOfWeekPart.SequenceEqual("7"))
-            return DayOfWeek.Saturday;
-
-        return null;
+        // Single day - use helper to parse numeric (1-7) or named (sun-sat)
+        return ParseDayOfWeekValue(dayOfWeekPart);
     }
 
     private static DayPattern? ParseDayPattern(ReadOnlySpan<char> dayOfWeekPart)
     {
+        // Named patterns (case-insensitive)
         if (dayOfWeekPart.Equals("MON-FRI", StringComparison.OrdinalIgnoreCase))
             return DayPattern.Weekdays;
-        if (dayOfWeekPart.Equals("SAT,SUN", StringComparison.OrdinalIgnoreCase))
+        if (dayOfWeekPart.Equals("SAT,SUN", StringComparison.OrdinalIgnoreCase) ||
+            dayOfWeekPart.Equals("SUN,SAT", StringComparison.OrdinalIgnoreCase))
             return DayPattern.Weekends;
 
-        return null;
+        return dayOfWeekPart switch
+        {
+            // Numeric patterns
+            "2-6" => DayPattern.Weekdays // Monday(2)-Friday(6)
+            ,
+            "1,7" or "7,1" => DayPattern.Weekends // Sunday(1),Saturday(7)
+            ,
+            _ => null
+        };
+    }
+
+    /// <summary>
+    /// Parse a single day-of-week value from either numeric (1-7) or named (sun-sat) format
+    /// Quartz cron: 1=Sunday, 2=Monday, ..., 7=Saturday
+    /// </summary>
+    private static DayOfWeek? ParseDayOfWeekValue(ReadOnlySpan<char> value)
+    {
+        if (value.IsEmpty || value.IsWhiteSpace())
+        {
+            return null;
+        }
+
+        // Try numeric first (1-7, where 1=Sunday in Quartz)
+        if (int.TryParse(value, out var numeric))
+        {
+            return numeric switch
+            {
+                1 => DayOfWeek.Sunday,
+                2 => DayOfWeek.Monday,
+                3 => DayOfWeek.Tuesday,
+                4 => DayOfWeek.Wednesday,
+                5 => DayOfWeek.Thursday,
+                6 => DayOfWeek.Friday,
+                7 => DayOfWeek.Saturday,
+                _ => null  // Out of range
+            };
+        }
+
+        // Try named (case-insensitive)
+        if (value.Equals("sun", StringComparison.OrdinalIgnoreCase)) return DayOfWeek.Sunday;
+        if (value.Equals("mon", StringComparison.OrdinalIgnoreCase)) return DayOfWeek.Monday;
+        if (value.Equals("tue", StringComparison.OrdinalIgnoreCase)) return DayOfWeek.Tuesday;
+        if (value.Equals("wed", StringComparison.OrdinalIgnoreCase)) return DayOfWeek.Wednesday;
+        if (value.Equals("thu", StringComparison.OrdinalIgnoreCase)) return DayOfWeek.Thursday;
+        if (value.Equals("fri", StringComparison.OrdinalIgnoreCase)) return DayOfWeek.Friday;
+        if (value.Equals("sat", StringComparison.OrdinalIgnoreCase)) return DayOfWeek.Saturday;
+
+        return null;  // Not a valid day name
     }
 
     private static MonthSpecifier ParseMonth(ReadOnlySpan<char> monthPart)
     {
         // "*" means all months (no constraint)
-        if (monthPart.SequenceEqual("*"))
+        if (monthPart is "*")
         {
             return new MonthSpecifier.None();
         }
 
-        // Month range: "1-3" (January through March)
-        int dashIndex = monthPart.IndexOf('-');
+        // Month range: "1-3" or "jan-mar" (January through March)
+        var dashIndex = monthPart.IndexOf('-');
         if (dashIndex > 0)
         {
             var startSpan = monthPart[..dashIndex];
             var endSpan = monthPart[(dashIndex + 1)..];
 
-            if (int.TryParse(startSpan, out var start) && int.TryParse(endSpan, out var end))
+            var start = ParseMonthValue(startSpan);
+            var end = ParseMonthValue(endSpan);
+
+            if (start.HasValue && end.HasValue)
             {
-                return new MonthSpecifier.Range(start, end);
+                return new MonthSpecifier.Range(start.Value, end.Value);
             }
         }
 
-        // Month list: "1,4,7,10" (January, April, July, October - quarterly)
+        // Month list: "1,4,7,10" or "jan,apr,jul,oct" (quarterly)
         if (monthPart.Contains(','))
         {
             List<int> months = [];
             Span<Range> ranges = stackalloc Range[12]; // Max 12 months
-            int count = monthPart.Split(ranges, ',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var count = monthPart.Split(ranges, ',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-            for (int i = 0; i < count; i++)
+            for (var i = 0; i < count; i++)
             {
-                if (int.TryParse(monthPart[ranges[i]], out var month))
+                var month = ParseMonthValue(monthPart[ranges[i]]);
+                if (month.HasValue)
                 {
-                    months.Add(month);
+                    months.Add(month.Value);
                 }
             }
 
@@ -211,14 +275,53 @@ internal sealed class QuartzCronParser
             }
         }
 
-        // Single month: "1" (January only)
-        if (int.TryParse(monthPart, out var singleMonth))
+        // Single month: "1" or "jan" (January only)
+        var singleMonth = ParseMonthValue(monthPart);
+        if (singleMonth.HasValue)
         {
-            return new MonthSpecifier.Single(singleMonth);
+            return new MonthSpecifier.Single(singleMonth.Value);
         }
 
         // Default to None if we can't parse
         return new MonthSpecifier.None();
+    }
+
+    /// <summary>
+    /// Parse a month value from either numeric (1-12) or named (jan-dec) format
+    /// Returns null only for empty/whitespace strings - otherwise returns parsed value (valid or invalid)
+    /// Invalid values are accepted to document actual cron parser behavior (validation deferred)
+    /// </summary>
+    private static int? ParseMonthValue(ReadOnlySpan<char> value)
+    {
+        // Empty or whitespace - can't parse
+        if (value.IsEmpty || value.IsWhiteSpace())
+        {
+            return null;
+        }
+
+        // Try numeric first - accept any integer (including negative, out-of-range)
+        // This matches cron parser behavior: parse anything, validate later
+        if (int.TryParse(value, out var numeric))
+        {
+            return numeric;
+        }
+
+        // Try named (case-insensitive) - use Equals for Span comparison
+        if (value.Equals("jan", StringComparison.OrdinalIgnoreCase)) return 1;
+        if (value.Equals("feb", StringComparison.OrdinalIgnoreCase)) return 2;
+        if (value.Equals("mar", StringComparison.OrdinalIgnoreCase)) return 3;
+        if (value.Equals("apr", StringComparison.OrdinalIgnoreCase)) return 4;
+        if (value.Equals("may", StringComparison.OrdinalIgnoreCase)) return 5;
+        if (value.Equals("jun", StringComparison.OrdinalIgnoreCase)) return 6;
+        if (value.Equals("jul", StringComparison.OrdinalIgnoreCase)) return 7;
+        if (value.Equals("aug", StringComparison.OrdinalIgnoreCase)) return 8;
+        if (value.Equals("sep", StringComparison.OrdinalIgnoreCase)) return 9;
+        if (value.Equals("oct", StringComparison.OrdinalIgnoreCase)) return 10;
+        if (value.Equals("nov", StringComparison.OrdinalIgnoreCase)) return 11;
+        if (value.Equals("dec", StringComparison.OrdinalIgnoreCase)) return 12;
+
+        // Not a number, not a valid name - can't parse
+        return null;
     }
 
     private static TimeOnly? ParseTimeOfDay(ReadOnlySpan<char> second, ReadOnlySpan<char> minute, ReadOnlySpan<char> hour, NaturalIntervalUnit unit)
@@ -251,5 +354,146 @@ internal sealed class QuartzCronParser
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Parse optional year field (1970-2099)
+    /// Returns null if not specified or wildcard (*)
+    /// </summary>
+    private static int? ParseYear(ReadOnlySpan<char> yearPart)
+    {
+        // Empty or wildcard - no year constraint
+        if (yearPart.IsEmpty || yearPart is "*")
+        {
+            return null;
+        }
+
+        // Parse year value
+        if (int.TryParse(yearPart, out var year))
+        {
+            // Quartz spec: year range is 1970-2099
+            // We don't validate here to match parser behavior (deferred validation)
+            return year;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Parse range from cron field (e.g., "9-17", "0-30", "1-15", "9-17/2")
+    /// Returns (null, null, null) if not a range
+    /// </summary>
+    private static (int? Start, int? End, int? Step) ParseRange(ReadOnlySpan<char> field)
+    {
+        // Check if field contains a dash (for ranges like "9-17")
+        var dashIndex = field.IndexOf('-');
+        if (field.IsEmpty || dashIndex < 0)
+        {
+            return (null, null, null);
+        }
+
+        // Skip if it's a wildcard or step pattern
+        if (field is "*" || field is "?" || field.StartsWith("*/"))
+        {
+            return (null, null, null);
+        }
+
+        // Check for range+step: "9-17/2"
+        int? step = null;
+        var rangeField = field;
+
+        var slashIndex = field.IndexOf('/');
+        if (slashIndex > 0)
+        {
+            var stepSpan = field[(slashIndex + 1)..];
+            // Parse step value - validation deferred to Quartz scheduler
+            // This allows parsing of any integer value (including 0, negative, or very large)
+            // Invalid values will be caught by Quartz during trigger creation
+            if (int.TryParse(stepSpan, out var stepValue))
+            {
+                step = stepValue;
+                rangeField = field[..slashIndex];
+            }
+        }
+
+        // Re-find dash in the range field (not the original field)
+        dashIndex = rangeField.IndexOf('-');
+
+        // Parse range: "9-17" → (9, 17) or "9-17/2" → (9, 17, 2)
+        if (dashIndex <= 0 || dashIndex >= rangeField.Length - 1) return (null, null, null);
+        var startSpan = rangeField[..dashIndex];
+        var endSpan = rangeField[(dashIndex + 1)..];
+
+        if (int.TryParse(startSpan, out var start) && int.TryParse(endSpan, out var end))
+        {
+            return (start, end, step);
+        }
+
+        return (null, null, null);
+    }
+
+    /// <summary>
+    /// Parse list from cron field with support for mixed syntax:
+    /// - Simple list: "0,15,30,45" → [0, 15, 30, 45]
+    /// - Mixed list+range: "0-4,8-12,20" → [0, 1, 2, 3, 4, 8, 9, 10, 11, 12, 20]
+    /// Returns null if not a list
+    /// </summary>
+    private static IReadOnlyList<int>? ParseList(ReadOnlySpan<char> field, int minValue, int maxValue)
+    {
+        // Check if field contains commas (for lists like "0,15,30,45")
+        var commaIndex = field.IndexOf(',');
+        if (field.IsEmpty || commaIndex < 0)
+        {
+            return null;
+        }
+
+        // Skip if it's a wildcard or step pattern
+        if (field is "*" || field is "?" || field.StartsWith("*/"))
+        {
+            return null;
+        }
+
+        // Parse list with possible ranges: "0-4,8-12,20" → [0,1,2,3,4,8,9,10,11,12,20]
+        var values = new List<int>();
+        var start = 0;
+
+        while (start < field.Length)
+        {
+            var nextComma = field[start..].IndexOf(',');
+            var part = nextComma >= 0
+                ? field.Slice(start, nextComma)
+                : field[start..];
+
+            // Check if this part is a range (e.g., "0-4")
+            var dashIndex = part.IndexOf('-');
+            if (dashIndex > 0 && dashIndex < part.Length - 1)  // Not at start or end
+            {
+                var rangeStart = part[..dashIndex];
+                var rangeEnd = part[(dashIndex + 1)..];
+
+                if (int.TryParse(rangeStart, out var s) &&
+                    int.TryParse(rangeEnd, out var e) &&
+                    s <= e &&
+                    s >= minValue && e <= maxValue)
+                {
+                    // Expand range: 0-4 → [0, 1, 2, 3, 4]
+                    for (var i = s; i <= e; i++)
+                    {
+                        values.Add(i);
+                    }
+                }
+            }
+            // Single value
+            else if (int.TryParse(part, out var value) && value >= minValue && value <= maxValue)
+            {
+                values.Add(value);
+            }
+
+            if (nextComma < 0) break;
+            start += nextComma + 1;
+        }
+
+        // Remove duplicates and sort
+        return values.Count >= 2 ? values.Distinct().OrderBy(v => v).ToList() : null;
     }
 }
