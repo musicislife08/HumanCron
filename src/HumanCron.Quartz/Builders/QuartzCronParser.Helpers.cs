@@ -84,7 +84,7 @@ internal sealed partial class QuartzCronParser
         }
 
         // Parse list with possible ranges: "0-4,8-12,20" → [0,1,2,3,4,8,9,10,11,12,20]
-        var values = new List<int>();
+        List<int> values = [];
         var start = 0;
 
         while (start < field.Length)

@@ -21,7 +21,7 @@ internal static class CronFormatHelpers
             return "*";
         }
 
-        var parts = new List<string>();
+        List<string> parts = [];
         var i = 0;
 
         while (i < values.Count)

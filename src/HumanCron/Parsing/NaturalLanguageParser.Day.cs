@@ -125,7 +125,7 @@ internal sealed partial class NaturalLanguageParser
 
         // Match all ordinals in the string (e.g., "1st", "15th", "30th")
         var ordinalMatches = Regex.Matches(ordinalList, @"(\d+)(st|nd|rd|th)", RegexOptions.IgnoreCase);
-        var values = new List<int>();
+        List<int> values = [];
 
         foreach (Match match in ordinalMatches)
         {
@@ -150,7 +150,7 @@ internal sealed partial class NaturalLanguageParser
         }
 
         var dayStrings = dayListString.Split(',', System.StringSplitOptions.RemoveEmptyEntries | System.StringSplitOptions.TrimEntries);
-        var days = new List<DayOfWeek>();
+        List<DayOfWeek> days = [];
 
         foreach (var dayStr in dayStrings)
         {

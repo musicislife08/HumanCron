@@ -417,7 +417,7 @@ internal sealed class NaturalLanguageFormatter : IScheduleFormatter
             return "*";
         }
 
-        var parts = new List<string>();
+        List<string> parts = [];
         var i = 0;
 
         while (i < months.Count)
@@ -505,7 +505,7 @@ internal sealed class NaturalLanguageFormatter : IScheduleFormatter
             return "*";
         }
 
-        var parts = new List<string>();
+        List<string> parts = [];
         var i = 0;
 
         while (i < values.Count)

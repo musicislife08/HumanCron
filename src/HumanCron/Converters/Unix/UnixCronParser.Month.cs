@@ -39,7 +39,7 @@ internal sealed partial class UnixCronParser
         if (monthPart.Contains(','))
         {
             var parts = monthPart.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            var months = new List<int>();
+            List<int> months = [];
 
             foreach (var part in parts)
             {

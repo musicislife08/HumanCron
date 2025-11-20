@@ -61,7 +61,7 @@ internal sealed partial class NaturalLanguageParser
         }
 
         var parts = notation.Split(',', System.StringSplitOptions.RemoveEmptyEntries | System.StringSplitOptions.TrimEntries);
-        var values = new List<int>();
+        List<int> values = [];
 
         foreach (var part in parts)
         {

@@ -71,7 +71,7 @@ internal sealed partial class UnixCronParser
 
         // Parse list with possible ranges: "0-4,8-12,20" → [0,1,2,3,4,8,9,10,11,12,20]
         var parts = field.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        var values = new List<int>();
+        List<int> values = [];
 
         foreach (var part in parts)
         {

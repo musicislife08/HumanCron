@@ -73,7 +73,7 @@ internal sealed partial class QuartzCronParser
         }
 
         // Check if this is a consecutive sequence (should be handled as a range instead)
-        var dayNumbers = new List<int>();
+        List<int> dayNumbers = [];
         foreach (var part in parts)
         {
             if (int.TryParse(part, out var dayNum) && dayNum is >= 1 and <= 7)
@@ -92,7 +92,7 @@ internal sealed partial class QuartzCronParser
             return null;  // Consecutive sequence - will be handled as a range
         }
 
-        var days = new List<DayOfWeek>();
+        List<DayOfWeek> days = [];
         foreach (var part in parts)
         {
             var day = ParseDayOfWeekValue(part.AsSpan());
@@ -136,7 +136,7 @@ internal sealed partial class QuartzCronParser
         }
 
         // Parse as numeric days and check if it's consecutive
-        var days = new List<int>();
+        List<int> days = [];
         foreach (var part in parts)
         {
             if (int.TryParse(part, out var dayNum) && dayNum is >= 1 and <= 7)
