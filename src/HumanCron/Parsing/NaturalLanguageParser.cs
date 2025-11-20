@@ -462,70 +462,14 @@ internal sealed partial class NaturalLanguageParser : IScheduleParser
         // These don't have explicit interval units, so they need special handling
         var specificDayMatch = SpecificDayPattern().Match(input);
 
-        // Extract interval: "every 30 seconds", "every day", or "every monday"
-        var intervalMatch = IntervalPattern().Match(input);
-
-        if (!intervalMatch.Success && !specificDayMatch.Success && !isOnPattern)
+        // Extract interval and unit - REFACTORED
+        // Parse interval using extracted method for better maintainability
+        var intervalResult = TryParseInterval(input, isOnPattern, specificDayMatch);
+        if (intervalResult is ParseResult<(int, IntervalUnit)>.Error intervalError)
         {
-            return new ParseResult<ScheduleSpec>.Error($"Unable to parse interval from: {input}. Expected format like 'every 30 minutes', 'every day', or 'every monday'");
+            return new ParseResult<ScheduleSpec>.Error(intervalError.Message);
         }
-
-        // Parse interval value (default to 1 if not specified)
-        var interval = 1;
-        IntervalUnit unit;
-
-        if (isOnPattern)
-        {
-            // Special case: "on" patterns are implicitly monthly
-            // "on last day in january" = every month on last day in january
-            interval = 1;
-            unit = IntervalUnit.Months;
-        }
-        else if (specificDayMatch.Success && !intervalMatch.Success)
-        {
-            // Special case: "every monday" - no explicit interval, defaults to weekly
-            interval = 1;
-            unit = IntervalUnit.Weeks;
-        }
-        else
-        {
-            // Normal case: "every 30 minutes", "every day", etc.
-            if (intervalMatch.Groups[1].Success && intervalMatch.Groups[1].ValueSpan.Trim().Length > 0)
-            {
-                var intervalSpan = intervalMatch.Groups[1].ValueSpan;
-                if (!int.TryParse(intervalSpan, out interval))
-                {
-                    return new ParseResult<ScheduleSpec>.Error($"Invalid interval number: {intervalSpan.ToString()}");
-                }
-            }
-
-            switch (interval)
-            {
-                // Validate interval is positive
-                case <= 0:
-                    return new ParseResult<ScheduleSpec>.Error("Interval must be a positive number (1 or greater)");
-                // Validate interval has reasonable upper bound
-                case > 1000:
-                    return new ParseResult<ScheduleSpec>.Error($"Interval too large: {interval}. Maximum allowed is 1000.");
-                default:
-                {
-                    // Parse unit from full word
-                    var unitString = intervalMatch.Groups[2].Value.ToLowerInvariant();
-                    unit = unitString switch
-                    {
-                        "second" or "seconds" => IntervalUnit.Seconds,
-                        "minute" or "minutes" => IntervalUnit.Minutes,
-                        "hour" or "hours" => IntervalUnit.Hours,
-                        "day" or "days" => IntervalUnit.Days,
-                        "week" or "weeks" => IntervalUnit.Weeks,
-                        "month" or "months" => IntervalUnit.Months,
-                        "year" or "years" => IntervalUnit.Years,
-                        _ => throw new InvalidOperationException($"Unknown unit: {unitString}")
-                    };
-                    break;
-                }
-            }
-        }
+        var (interval, unit) = ((ParseResult<(int, IntervalUnit)>.Success)intervalResult).Value;
 
         // Extract time constraints (optional) - REFACTORED
         // Parse time constraints using extracted method for better maintainability
@@ -1227,5 +1171,83 @@ internal sealed partial class NaturalLanguageParser : IScheduleParser
             HourStart = hourStart,
             HourEnd = hourEnd
         });
+    }
+
+    /// <summary>
+    /// Parse interval and unit from natural language input
+    /// Handles special cases like "on" patterns (implicitly monthly) and specific day patterns (implicitly weekly)
+    /// </summary>
+    private ParseResult<(int interval, IntervalUnit unit)> TryParseInterval(
+        string input,
+        bool isOnPattern,
+        Match specificDayMatch)
+    {
+        // Extract interval: "every 30 seconds", "every day", or "every monday"
+        var intervalMatch = IntervalPattern().Match(input);
+
+        if (!intervalMatch.Success && !specificDayMatch.Success && !isOnPattern)
+        {
+            return new ParseResult<(int, IntervalUnit)>.Error(
+                $"Unable to parse interval from: {input}. Expected format like 'every 30 minutes', 'every day', or 'every monday'");
+        }
+
+        // Parse interval value (default to 1 if not specified)
+        var interval = 1;
+        IntervalUnit unit;
+
+        if (isOnPattern)
+        {
+            // Special case: "on" patterns are implicitly monthly
+            // "on last day in january" = every month on last day in january
+            interval = 1;
+            unit = IntervalUnit.Months;
+        }
+        else if (specificDayMatch.Success && !intervalMatch.Success)
+        {
+            // Special case: "every monday" - no explicit interval, defaults to weekly
+            interval = 1;
+            unit = IntervalUnit.Weeks;
+        }
+        else
+        {
+            // Normal case: "every 30 minutes", "every day", etc.
+            if (intervalMatch.Groups[1].Success && intervalMatch.Groups[1].ValueSpan.Trim().Length > 0)
+            {
+                var intervalSpan = intervalMatch.Groups[1].ValueSpan;
+                if (!int.TryParse(intervalSpan, out interval))
+                {
+                    return new ParseResult<(int, IntervalUnit)>.Error($"Invalid interval number: {intervalSpan.ToString()}");
+                }
+            }
+
+            switch (interval)
+            {
+                // Validate interval is positive
+                case <= 0:
+                    return new ParseResult<(int, IntervalUnit)>.Error("Interval must be a positive number (1 or greater)");
+                // Validate interval has reasonable upper bound
+                case > 1000:
+                    return new ParseResult<(int, IntervalUnit)>.Error($"Interval too large: {interval}. Maximum allowed is 1000.");
+                default:
+                {
+                    // Parse unit from full word
+                    var unitString = intervalMatch.Groups[2].Value.ToLowerInvariant();
+                    unit = unitString switch
+                    {
+                        "second" or "seconds" => IntervalUnit.Seconds,
+                        "minute" or "minutes" => IntervalUnit.Minutes,
+                        "hour" or "hours" => IntervalUnit.Hours,
+                        "day" or "days" => IntervalUnit.Days,
+                        "week" or "weeks" => IntervalUnit.Weeks,
+                        "month" or "months" => IntervalUnit.Months,
+                        "year" or "years" => IntervalUnit.Years,
+                        _ => throw new InvalidOperationException($"Unknown unit: {unitString}")
+                    };
+                    break;
+                }
+            }
+        }
+
+        return new ParseResult<(int, IntervalUnit)>.Success((interval, unit));
     }
 }
