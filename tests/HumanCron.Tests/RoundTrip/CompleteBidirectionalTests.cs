@@ -509,6 +509,29 @@ public class CompleteBidirectionalTests
     }
 
     [Test]
+    public void RoundTrip_MonthlyWithDayAndMultipleMonths_UsesOrdinals()
+    {
+        // Test that ordinals are used for monthly patterns with multiple months
+        var input = "every month on the 15th in january,april,july,october at 9am";
+        var expected = "every month on the 15th at 9am in january,april,july,october"; // Formatter outputs time before month
+
+        var parseResult = _parser.Parse(input, new ScheduleParserOptions { TimeZone = DateTimeZone.Utc });
+        Assert.That(parseResult, Is.TypeOf<ParseResult<ScheduleSpec>.Success>());
+        var spec = ((ParseResult<ScheduleSpec>.Success)parseResult).Value;
+        var formatted = _formatter.Format(spec);
+
+        // Verify ordinals are used (main goal of this test)
+        Assert.That(formatted, Does.Contain("on the 15th"));
+        Assert.That(formatted, Is.EqualTo(expected));
+        Assert.That(spec.DayOfMonth, Is.EqualTo(15));
+        Assert.That(spec.Month, Is.TypeOf<MonthSpecifier.List>());
+
+        // Verify the formatted output can be parsed back
+        var reparsed = _parser.Parse(formatted, new ScheduleParserOptions { TimeZone = DateTimeZone.Utc });
+        Assert.That(reparsed, Is.TypeOf<ParseResult<ScheduleSpec>.Success>());
+    }
+
+    [Test]
     public void RoundTrip_DayOfWeekList_FormatsAndParsesCorrectly()
     {
         var natural = "every monday,wednesday,friday at 9am";
