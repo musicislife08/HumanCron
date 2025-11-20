@@ -1,6 +1,9 @@
 using HumanCron.Models.Internal;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using HumanCron.Models;
+using HumanCron.Utilities;
 using NodaTime;
 
 namespace HumanCron.Converters.Unix;
@@ -96,6 +99,19 @@ internal sealed class UnixCronBuilder
 
     private string GetMinutePart(ScheduleSpec spec)
     {
+        // Minute list (0,15,30,45) - compact consecutive sequences to ranges
+        if (spec.MinuteList is { Count: > 0 })
+        {
+            return CronFormatHelpers.CompactList(spec.MinuteList);
+        }
+
+        // Minute range (0-30) or range+step (0-30/5)
+        if (spec is { MinuteStart: not null, MinuteEnd: not null })
+        {
+            var range = $"{spec.MinuteStart.Value}-{spec.MinuteEnd.Value}";
+            return spec.MinuteStep.HasValue ? $"{range}/{spec.MinuteStep.Value}" : range;
+        }
+
         if (spec.Unit == IntervalUnit.Minutes)
         {
             return spec.Interval == 1 ? "*" : $"*/{spec.Interval}";
@@ -113,6 +129,19 @@ internal sealed class UnixCronBuilder
 
     private string GetHourPart(ScheduleSpec spec)
     {
+        // Hour list (9,12,15,18) - compact consecutive sequences to ranges
+        if (spec.HourList is { Count: > 0 })
+        {
+            return CronFormatHelpers.CompactList(spec.HourList);
+        }
+
+        // Hour range (9-17) or range+step (9-17/2)
+        if (spec is { HourStart: not null, HourEnd: not null })
+        {
+            var range = $"{spec.HourStart.Value}-{spec.HourEnd.Value}";
+            return spec.HourStep.HasValue ? $"{range}/{spec.HourStep.Value}" : range;
+        }
+
         if (spec.Unit == IntervalUnit.Minutes)
         {
             return "*";  // Every hour for minute intervals
@@ -174,6 +203,19 @@ internal sealed class UnixCronBuilder
 
     private static string GetDayPart(ScheduleSpec spec)
     {
+        // Day list (1,15,30) - compact consecutive sequences to ranges
+        if (spec.DayList is { Count: > 0 })
+        {
+            return CronFormatHelpers.CompactList(spec.DayList);
+        }
+
+        // Day range (1-15) or range+step (1-15/3)
+        if (spec is { DayStart: not null, DayEnd: not null })
+        {
+            var range = $"{spec.DayStart.Value}-{spec.DayEnd.Value}";
+            return spec.DayStep.HasValue ? $"{range}/{spec.DayStep.Value}" : range;
+        }
+
         // Day-of-month (1-31) - use * when using day-of-week
         if (spec.DayOfWeek.HasValue || spec.DayPattern.HasValue)
         {
@@ -209,6 +251,20 @@ internal sealed class UnixCronBuilder
 
     private string GetDayOfWeekPart(ScheduleSpec spec)
     {
+        // Day-of-week list (e.g., "every monday,wednesday,friday" → "1,3,5")
+        if (spec.DayOfWeekList is { Count: > 0 } dayList)
+        {
+            var dayNumbers = dayList.Select(ConvertDayOfWeek);
+            return string.Join(",", dayNumbers);
+        }
+
+        // Day-of-week custom range (e.g., "every tuesday-thursday" → "2,3,4")
+        if (spec is { DayOfWeekStart: not null, DayOfWeekEnd: not null })
+        {
+            var days = ExpandDayOfWeekRange(spec.DayOfWeekStart.Value, spec.DayOfWeekEnd.Value);
+            return string.Join(",", days.Select(ConvertDayOfWeek));
+        }
+
         // Day-of-week (0-7, both 0 and 7 = Sunday)
         if (spec.DayPattern.HasValue)
         {
@@ -233,6 +289,37 @@ internal sealed class UnixCronBuilder
         return ConvertDayOfWeek(bclDayOfWeek);
 
         // No specific day-of-week constraint
+    }
+
+    /// <summary>
+    /// Expand day-of-week range to list of days
+    /// Handles wraparound: Friday-Monday → [Friday, Saturday, Sunday, Monday]
+    /// </summary>
+    private static IEnumerable<DayOfWeek> ExpandDayOfWeekRange(DayOfWeek start, DayOfWeek end)
+    {
+        var startNum = (int)start;
+        var endNum = (int)end;
+
+        if (startNum <= endNum)
+        {
+            // Simple range: Tuesday-Thursday = [2,3,4]
+            for (int i = startNum; i <= endNum; i++)
+            {
+                yield return (DayOfWeek)i;
+            }
+        }
+        else
+        {
+            // Wraparound: Friday-Monday = [5,6,0,1]
+            for (int i = startNum; i <= 6; i++)
+            {
+                yield return (DayOfWeek)i;
+            }
+            for (int i = 0; i <= endNum; i++)
+            {
+                yield return (DayOfWeek)i;
+            }
+        }
     }
 
     /// <summary>
@@ -270,4 +357,5 @@ internal sealed class UnixCronBuilder
             _ => throw new InvalidOperationException($"Unknown day of week: {day}")
         };
     }
+
 }

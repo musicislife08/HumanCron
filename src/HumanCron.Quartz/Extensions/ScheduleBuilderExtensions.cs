@@ -68,10 +68,7 @@ public static class ScheduleBuilderExtensions
         /// </example>
         public DateTimeOffset? CalculateQuartzStartTime(DateTimeOffset? referenceTime = null)
         {
-            if (builder == null)
-            {
-                throw new ArgumentNullException(nameof(builder));
-            }
+            ArgumentNullException.ThrowIfNull(builder);
 
             var spec = GetScheduleSpec(builder);
             var quartzBuilder = QuartzScheduleBuilder.Create();

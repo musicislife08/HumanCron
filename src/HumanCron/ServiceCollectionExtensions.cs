@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -116,9 +117,11 @@ public static class ServiceCollectionExtensions
                 // Load assembly by name (let .NET resolve dependencies)
                 Assembly.Load(assemblyName);
             }
-            catch
+            catch (Exception ex)
             {
                 // Ignore load failures (might be incompatible assemblies)
+                // Log for debugging purposes in development
+                Debug.WriteLine($"HumanCron: Failed to load assembly '{dllPath}': {ex.Message}");
             }
         }
 

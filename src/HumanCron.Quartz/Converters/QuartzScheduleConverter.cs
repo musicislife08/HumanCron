@@ -5,6 +5,7 @@ using HumanCron.Quartz.Abstractions;
 using Quartz;
 using System;
 using NodaTime;
+// ReSharper disable MemberCanBePrivate.Global
 
 namespace HumanCron.Quartz.Converters;
 
@@ -173,12 +174,10 @@ public sealed class QuartzScheduleConverter : IQuartzScheduleConverter
             .WithSchedule(scheduleSuccess.Value);
 
         // Set start time if calculated (for CalendarInterval schedules with constraints)
-        if (startSuccess.Value.HasValue)
-        {
-            // Explicitly convert to UTC to ensure Quartz interprets it correctly
-            var startTimeUtc = startSuccess.Value.Value.ToUniversalTime();
-            triggerBuilder.StartAt(startTimeUtc);
-        }
+        if (!startSuccess.Value.HasValue) return new ParseResult<TriggerBuilder>.Success(triggerBuilder);
+        // Explicitly convert to UTC to ensure Quartz interprets it correctly
+        var startTimeUtc = startSuccess.Value.Value.ToUniversalTime();
+        triggerBuilder.StartAt(startTimeUtc);
 
         return new ParseResult<TriggerBuilder>.Success(triggerBuilder);
     }
