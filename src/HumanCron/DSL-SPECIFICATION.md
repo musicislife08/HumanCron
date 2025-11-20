@@ -100,17 +100,25 @@ at noon
 - `weekday` / `weekdays` - Monday through Friday
 - `weekend` / `weekends` - Saturday and Sunday
 
+**Day Lists:**
+- `every monday,wednesday,friday` - Specific days (comma-separated)
+- `every mon,wed,fri` - Same (abbreviations accepted)
+- `every tuesday,thursday` - Any combination of days
+
 **Day Ranges:**
-- `between monday and friday` - Mon-Fri
+- `between monday and friday` - Mon-Fri (verbose syntax)
+- `every tuesday-thursday` - Tue-Thu (compact syntax)
 - `between mon and fri` - Same (abbreviations accepted)
-- `between tuesday and thursday` - Tue-Thu
+- Supports wraparound: `friday-monday` (Fri, Sat, Sun, Mon)
 
 **Examples:**
 ```
 every monday                    → Every Monday (full name)
 every mon                       → Every Monday (abbreviation accepted)
-every weekday                   → Mon-Fri
-between monday and friday       → Mon-Fri (range syntax)
+every weekday                   → Mon-Fri (pattern)
+every monday,wednesday,friday   → Every Mon, Wed, Fri (list)
+every tuesday-thursday          → Every Tue-Thu (compact range)
+between monday and friday       → Mon-Fri (verbose range syntax)
 between mon and fri             → Mon-Fri (abbreviations)
 ```
 
@@ -277,9 +285,11 @@ in june,july,august             → Summer months
 "every day on weekdays"          → Mon-Fri at midnight
 "every monday"                   → Every Monday at midnight
 "every tuesday"                  → Every Tuesday at midnight
+"every monday,wednesday,friday"  → Every Mon, Wed, Fri at midnight
+"every tuesday-thursday"         → Every Tue-Thu at midnight
 "every 2 weeks on sunday"        → Every 2 weeks on Sunday
 "on 15 every month"              → Every month on the 15th
-"between monday and friday"      → Mon-Fri at midnight
+"between monday and friday"      → Mon-Fri at midnight (verbose)
 ```
 
 ### Interval + Month (NEW in v2.0)
@@ -297,6 +307,8 @@ in june,july,august             → Summer months
 "every monday at 2pm"            → Every Monday at 2pm
 "every day at 2pm on weekdays"   → Mon-Fri at 2pm (any order)
 "at 9am every weekday"           → Mon-Fri at 9am
+"every monday,wednesday,friday at 9am" → Every Mon, Wed, Fri at 9am
+"every tuesday-thursday at 2pm"  → Every Tue-Thu at 2pm
 "every 2 weeks on sunday at 1pm" → Every 2 weeks on Sunday at 1pm
 "on 15 every month at 2pm"       → 15th of every month at 2pm
 "between monday and friday at 9am" → Mon-Fri at 9am
@@ -542,9 +554,17 @@ private static partial Regex TimePattern();
 [GeneratedRegex(@"every\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun|weekday|weekdays|weekend|weekends)", RegexOptions.IgnoreCase)]
 private static partial Regex SpecificDayPattern();
 
-// Day range: between monday and friday, between mon and fri
+// Day-of-week list: every monday,wednesday,friday or every mon,wed,fri
+[GeneratedRegex(@"every\s+((?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun)(?:\s*,\s*(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun))+)", RegexOptions.IgnoreCase)]
+private static partial Regex DayOfWeekListPattern();
+
+// Day range: between monday and friday, every tuesday-thursday
 [GeneratedRegex(@"between\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun)\s+and\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun)", RegexOptions.IgnoreCase)]
 private static partial Regex DayRangePattern();
+
+// Custom day-of-week range: every tuesday-thursday or every tue-thu (compact notation)
+[GeneratedRegex(@"every\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun)\s*-\s*(monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun)", RegexOptions.IgnoreCase)]
+private static partial Regex DayOfWeekCustomRangePattern();
 
 // Combined month and day: on january 1st, on dec 25th, on april 15th (NEW in v0.3.0)
 // This pattern is checked BEFORE separate month/day patterns for priority

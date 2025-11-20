@@ -55,18 +55,36 @@ HumanCron/                                  # Standalone repository
 │   │   │
 │   │   └── Internal/                         # NOT exposed in public API
 │   │       ├── ScheduleSpec.cs               # Internal parsing representation
+│   │       ├── ParsedConstraints.cs          # Internal parsing constraints
 │   │       ├── IntervalUnit.cs               # Internal enum
-│   │       └── DayPattern.cs                 # Internal enum
+│   │       ├── DayPattern.cs                 # Internal enum
+│   │       └── MonthSpecifier.cs             # Internal discriminated union
 │   │
-│   ├── Parsing/
-│   │   ├── NaturalLanguageParser.cs          # Text → ScheduleSpec (internal)
-│   │   └── PatternMatchers.cs                # Regex patterns (internal)
+│   ├── Parsing/                              # Domain-focused partial classes
+│   │   ├── NaturalLanguageParser.cs          # Main entry point
+│   │   ├── NaturalLanguageParser.Day.cs      # Day parsing logic
+│   │   ├── NaturalLanguageParser.Month.cs    # Month parsing logic
+│   │   ├── NaturalLanguageParser.Time.cs     # Time parsing logic
+│   │   ├── NaturalLanguageParser.Year.cs     # Year parsing logic
+│   │   ├── NaturalLanguageParser.Interval.cs # Interval parsing logic
+│   │   └── NaturalLanguageParser.Helpers.cs  # Shared helpers
+│   │
+│   ├── Formatting/
+│   │   └── NaturalLanguageFormatter.cs       # ScheduleSpec → Text (internal)
 │   │
 │   ├── Converters/
 │   │   └── Unix/
 │   │       ├── UnixCronConverter.cs          # Implements IHumanCronConverter
 │   │       ├── UnixCronBuilder.cs            # ScheduleSpec → 5-part cron (internal)
-│   │       └── UnixCronParser.cs             # 5-part cron → ScheduleSpec (internal)
+│   │       ├── UnixCronParser.cs             # Main entry point
+│   │       ├── UnixCronParser.DayOfWeek.cs   # Day-of-week parsing
+│   │       ├── UnixCronParser.Month.cs       # Month parsing
+│   │       ├── UnixCronParser.Time.cs        # Time parsing
+│   │       ├── UnixCronParser.Interval.cs    # Interval detection
+│   │       └── UnixCronParser.Helpers.cs     # Range/list parsing
+│   │
+│   ├── Utilities/
+│   │   └── CronFormatHelpers.cs              # Shared formatting utilities
 │   │
 │   └── DependencyInjection/
 │       └── ServiceCollectionExtensions.cs    # AddHumanCron() for DI registration
@@ -82,8 +100,16 @@ HumanCron/                                  # Standalone repository
 │   │   ├── QuartzCronBuilder.cs              # ScheduleSpec → CronScheduleBuilder (internal)
 │   │   └── QuartzCalendarBuilder.cs          # ScheduleSpec → CalendarIntervalScheduleBuilder (internal)
 │   │
-│   ├── Parsers/
-│   │   └── QuartzScheduleParser.cs           # IScheduleBuilder → ScheduleSpec (internal)
+│   ├── Builders/                             # Domain-focused partial classes
+│   │   ├── QuartzCronParser.cs               # Main entry point
+│   │   ├── QuartzCronParser.DayOfWeek.cs     # Day-of-week parsing (Span<T>)
+│   │   ├── QuartzCronParser.Month.cs         # Month parsing
+│   │   ├── QuartzCronParser.Time.cs          # Time parsing
+│   │   ├── QuartzCronParser.Year.cs          # Year parsing
+│   │   ├── QuartzCronParser.Interval.cs      # Interval detection
+│   │   ├── QuartzCronParser.Helpers.cs       # Range/list parsing (Span<T>)
+│   │   ├── QuartzScheduleBuilder.cs          # Main builder
+│   │   └── QuartzScheduleParser.cs           # IScheduleBuilder → ScheduleSpec
 │   │
 │   └── Extensions/
 │       └── ScheduleBuilderExtensions.cs      # Fluent builder → Quartz schedules
@@ -490,6 +516,63 @@ public static class ServiceCollectionExtensions
 ```
 
 ---
+
+## Architecture Patterns
+
+### Parser Organization (Domain-Focused Partial Classes)
+
+All parsers are organized using **partial classes split by domain** for improved maintainability:
+
+**Benefits:**
+- **Separation of Concerns**: Each domain (Day, Month, Time, Year, Interval) has its own file
+- **Reduced Complexity**: Main parser file reduced from 1262 lines → 159 lines (main entry point only)
+- **Focused Testing**: Domain-specific tests can target specific partial class files
+- **Easier Navigation**: Developers can quickly find day parsing logic in `*.Day.cs`, month logic in `*.Month.cs`, etc.
+
+**Examples:**
+```
+NaturalLanguageParser.cs           → Main entry point (Parse method)
+NaturalLanguageParser.Day.cs       → Day parsing (patterns, helpers, methods)
+NaturalLanguageParser.Month.cs     → Month parsing (patterns, helpers, methods)
+NaturalLanguageParser.Time.cs      → Time parsing (patterns, helpers, methods)
+...
+```
+
+### Modern C# Patterns
+
+**Collection Expressions** (C# 12):
+```csharp
+// Old style
+var values = new List<int>();
+
+// Modern style (used throughout codebase)
+List<int> values = [];
+```
+
+Benefits: Cleaner syntax, better type inference, eliminates constructor call overhead.
+
+**Discriminated Unions** (Record-based):
+```csharp
+public abstract record MonthSpecifier
+{
+    public sealed record None() : MonthSpecifier;
+    public sealed record Single(int Month) : MonthSpecifier;
+    public sealed record Range(int Start, int End) : MonthSpecifier;
+    public sealed record List(IReadOnlyList<int> Months) : MonthSpecifier;
+}
+```
+
+Benefits: Type-safe, exhaustive pattern matching, compiler-enforced completeness.
+
+### Shared Utilities
+
+**CronFormatHelpers** - Shared formatting logic for consistent list/range compaction:
+```csharp
+// Compacts consecutive sequences for cleaner cron expressions
+CompactList([0,1,2,3,4,8,9,10,11,12,20]) → "0-4,8-12,20"
+```
+
+Used by both UnixCronBuilder and QuartzCronBuilder for DRY formatting.
 
 ## Testing Strategy
 

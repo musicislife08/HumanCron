@@ -136,7 +136,8 @@ All patterns must start with `"every"`:
 
 - **Specific Day**: `every monday`, `every friday`, `on tuesday`
 - **Day Patterns**: `every weekday`, `on weekends`
-- **Day Ranges**: `between monday and friday`, `between saturday and sunday`
+- **Day Lists**: `every monday,wednesday,friday`, `every mon,wed,fri` (specific days)
+- **Day Ranges**: `between monday and friday`, `every tuesday-thursday` (compact notation)
 
 ### Month Selection
 
@@ -175,6 +176,8 @@ every monday                             → 0 0 * * 1
 every monday at 9am                      → 0 9 * * 1
 every 2 weeks on friday at 5pm           → (CalendarInterval schedule)
 every weekday at 9am                     → 0 9 * * 1-5
+every monday,wednesday,friday            → 0 0 * * 1,3,5
+every tuesday-thursday at 9am            → 0 9 * * 2-4
 every day in january                     → 0 0 * 1 *
 every day in january at 9am              → 0 9 * 1 *
 every monday in january                  → 0 0 * 1 1
