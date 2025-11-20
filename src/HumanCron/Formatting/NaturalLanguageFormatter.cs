@@ -186,42 +186,42 @@ internal sealed class NaturalLanguageFormatter : IScheduleFormatter
 
         // Add day-of-month constraint - check for advanced Quartz features first
 
-        // Last weekday: "on last weekday"
+        // Last weekday: "on the last weekday"
         if (spec is { IsLastDay: true, IsNearestWeekday: true })
         {
-            parts.Add("on last weekday");
+            parts.Add("on the last weekday");
         }
-        // Last day offset: "on 3rd to last day" or "on day before last"
+        // Last day offset: "on the 3rd to last day" or "on the day before last"
         else if (spec.LastDayOffset.HasValue)
         {
             parts.Add(spec.LastDayOffset.Value == 1
-                ? "on day before last"
-                : $"on {FormatOrdinal(spec.LastDayOffset.Value)} to last day");
+                ? "on the day before last"
+                : $"on the {FormatOrdinal(spec.LastDayOffset.Value)} to last day");
         }
-        // Last day: "on last day"
+        // Last day: "on the last day"
         // Skip if already handled in monthly+single month block
         else if (spec.IsLastDay && !isMonthlyWithSingleMonth)
         {
-            parts.Add("on last day");
+            parts.Add("on the last day");
         }
-        // Last occurrence of day-of-week: "on last friday"
+        // Last occurrence of day-of-week: "on the last friday"
         // Skip if already handled in monthly+single month block
         else if (spec is { IsLastDayOfWeek: true, DayOfWeek: not null } && !isMonthlyWithSingleMonth)
         {
             var dayName = spec.DayOfWeek.Value.ToString().ToLowerInvariant();
-            parts.Add($"on last {dayName}");
+            parts.Add($"on the last {dayName}");
         }
-        // Weekday nearest: "on weekday nearest the 15th"
+        // Weekday nearest: "on the weekday nearest the 15th"
         else if (spec is { IsNearestWeekday: true, DayOfMonth: not null })
         {
-            parts.Add($"on weekday nearest the {FormatOrdinal(spec.DayOfMonth.Value)}");
+            parts.Add($"on the weekday nearest the {FormatOrdinal(spec.DayOfMonth.Value)}");
         }
-        // Nth occurrence: "on 3rd friday"
+        // Nth occurrence: "on the 3rd friday"
         // Skip if already handled in monthly+single month block
         else if (spec is { NthOccurrence: not null, DayOfWeek: not null } && !isMonthlyWithSingleMonth)
         {
             var dayName = spec.DayOfWeek.Value.ToString().ToLowerInvariant();
-            parts.Add($"on {FormatOrdinal(spec.NthOccurrence.Value)} {dayName}");
+            parts.Add($"on the {FormatOrdinal(spec.NthOccurrence.Value)} {dayName}");
         }
         // Combined month+day: "on january 1st" (more natural than "on the 1st in january")
         // Use this for yearly schedules with a single month

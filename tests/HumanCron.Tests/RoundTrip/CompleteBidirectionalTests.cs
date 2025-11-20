@@ -38,7 +38,7 @@ public class CompleteBidirectionalTests
     public void RoundTrip_LastDay_FormatsAndParsesCorrectly()
     {
         // Natural → Spec → Natural
-        var natural = "every month on last day";
+        var natural = "every month on the last day";
         var parseResult = _parser.Parse(natural, new ScheduleParserOptions { TimeZone = DateTimeZone.Utc });
         Assert.That(parseResult, Is.TypeOf<ParseResult<ScheduleSpec>.Success>());
         var spec = ((ParseResult<ScheduleSpec>.Success)parseResult).Value;
@@ -51,7 +51,7 @@ public class CompleteBidirectionalTests
     [Test]
     public void RoundTrip_LastFriday_FormatsAndParsesCorrectly()
     {
-        var natural = "every month on last friday";
+        var natural = "every month on the last friday";
         var parseResult = _parser.Parse(natural, new ScheduleParserOptions { TimeZone = DateTimeZone.Utc });
         Assert.That(parseResult, Is.TypeOf<ParseResult<ScheduleSpec>.Success>());
         var spec = ((ParseResult<ScheduleSpec>.Success)parseResult).Value;
@@ -65,7 +65,7 @@ public class CompleteBidirectionalTests
     [Test]
     public void RoundTrip_ThirdToLastDay_FormatsAndParsesCorrectly()
     {
-        var natural = "every month on 3rd to last day";
+        var natural = "every month on the 3rd to last day";
         var parseResult = _parser.Parse(natural, new ScheduleParserOptions { TimeZone = DateTimeZone.Utc });
         Assert.That(parseResult, Is.TypeOf<ParseResult<ScheduleSpec>.Success>());
         var spec = ((ParseResult<ScheduleSpec>.Success)parseResult).Value;
@@ -78,7 +78,7 @@ public class CompleteBidirectionalTests
     [Test]
     public void RoundTrip_DayBeforeLast_FormatsAndParsesCorrectly()
     {
-        var natural = "every month on day before last";
+        var natural = "every month on the day before last";
         var parseResult = _parser.Parse(natural, new ScheduleParserOptions { TimeZone = DateTimeZone.Utc });
         Assert.That(parseResult, Is.TypeOf<ParseResult<ScheduleSpec>.Success>());
         var spec = ((ParseResult<ScheduleSpec>.Success)parseResult).Value;
@@ -91,7 +91,7 @@ public class CompleteBidirectionalTests
     [Test]
     public void RoundTrip_WeekdayNearest15th_FormatsAndParsesCorrectly()
     {
-        var natural = "every month on weekday nearest the 15th";
+        var natural = "every month on the weekday nearest the 15th";
         var parseResult = _parser.Parse(natural, new ScheduleParserOptions { TimeZone = DateTimeZone.Utc });
         Assert.That(parseResult, Is.TypeOf<ParseResult<ScheduleSpec>.Success>());
         var spec = ((ParseResult<ScheduleSpec>.Success)parseResult).Value;
@@ -105,7 +105,7 @@ public class CompleteBidirectionalTests
     [Test]
     public void RoundTrip_LastWeekday_FormatsAndParsesCorrectly()
     {
-        var natural = "every month on last weekday";
+        var natural = "every month on the last weekday";
         var parseResult = _parser.Parse(natural, new ScheduleParserOptions { TimeZone = DateTimeZone.Utc });
         Assert.That(parseResult, Is.TypeOf<ParseResult<ScheduleSpec>.Success>());
         var spec = ((ParseResult<ScheduleSpec>.Success)parseResult).Value;
@@ -119,7 +119,7 @@ public class CompleteBidirectionalTests
     [Test]
     public void RoundTrip_ThirdFriday_FormatsAndParsesCorrectly()
     {
-        var natural = "every month on 3rd friday";
+        var natural = "every month on the 3rd friday";
         var parseResult = _parser.Parse(natural, new ScheduleParserOptions { TimeZone = DateTimeZone.Utc });
         Assert.That(parseResult, Is.TypeOf<ParseResult<ScheduleSpec>.Success>());
         var spec = ((ParseResult<ScheduleSpec>.Success)parseResult).Value;
