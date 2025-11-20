@@ -166,9 +166,24 @@ internal sealed class NaturalLanguageFormatter : IScheduleFormatter
 
         // Add day-of-week constraint (e.g., "every monday" or "between monday and friday")
         // Skip if already handled in monthly→yearly conversion above
+        // Priority: list > range > single day > pattern
+        // Check for day-of-week list first: "every monday,wednesday,friday"
+        if (spec.DayOfWeekList is { Count: > 0 } dayOfWeekList)
+        {
+            var dayNames = dayOfWeekList.Select(d => d.ToString().ToLowerInvariant());
+            parts[^1] = string.Join(",", dayNames);
+        }
+        // Check for custom day-of-week range: "every tuesday-thursday"
+        else if (spec is { DayOfWeekStart: not null, DayOfWeekEnd: not null })
+        {
+            var startDay = spec.DayOfWeekStart.Value.ToString().ToLowerInvariant();
+            var endDay = spec.DayOfWeekEnd.Value.ToString().ToLowerInvariant();
+            parts[^1] = $"{startDay}-{endDay}";
+        }
+        // Single day-of-week
         // Exception: Don't replace interval if NthOccurrence or IsLastDayOfWeek is set
         // because those need "every month on 3rd friday" not "every friday on 3rd friday"
-        if (!isMonthlyWithSingleMonth && // NEW: Skip if already handled
+        else if (!isMonthlyWithSingleMonth && // NEW: Skip if already handled
             spec is { DayOfWeek: not null, NthOccurrence: null, IsLastDayOfWeek: false })
         {
             // No "on" prefix for specific days when using "every" already
@@ -386,9 +401,56 @@ internal sealed class NaturalLanguageFormatter : IScheduleFormatter
             MonthSpecifier.None => string.Empty,
             MonthSpecifier.Single single => $"in {MonthNumberToName[single.Month]}",
             MonthSpecifier.Range range => $"between {MonthNumberToName[range.Start]} and {MonthNumberToName[range.End]}",
-            MonthSpecifier.List list => $"in {string.Join(",", list.Months.Select(m => MonthNumberToName[m]))}",
+            MonthSpecifier.List list => $"in {CompactMonthList(list.Months)}",
             _ => throw new InvalidOperationException($"Unknown month specifier type: {monthSpec.GetType().Name}")
         };
+    }
+
+    /// <summary>
+    /// Format month list with compact range notation: "january-march,july,october-december"
+    /// Uses ranges for 3+ consecutive months, individual names otherwise
+    /// </summary>
+    private static string CompactMonthList(IReadOnlyList<int> months)
+    {
+        if (months.Count == 0)
+        {
+            return "*";
+        }
+
+        var parts = new List<string>();
+        var i = 0;
+
+        while (i < months.Count)
+        {
+            var start = months[i];
+            var end = start;
+
+            // Find consecutive sequence
+            while (i + 1 < months.Count && months[i + 1] == end + 1)
+            {
+                i++;
+                end = months[i];
+            }
+
+            // Use range notation for 3+ consecutive months, otherwise list individual month names
+            var sequenceLength = end - start + 1;
+            if (sequenceLength >= 3)
+            {
+                parts.Add($"{MonthNumberToName[start]}-{MonthNumberToName[end]}");
+            }
+            else
+            {
+                // Add individual month names (1 or 2 consecutive months)
+                for (var j = start; j <= end; j++)
+                {
+                    parts.Add(MonthNumberToName[j]);
+                }
+            }
+
+            i++;
+        }
+
+        return string.Join(",", parts);
     }
 
     private static string FormatTime(TimeOnly time)

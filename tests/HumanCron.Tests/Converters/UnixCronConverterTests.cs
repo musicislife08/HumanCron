@@ -1105,4 +1105,137 @@ public class UnixCronConverterTests
     }
 
     #endregion
+
+    #region Priority 4 Features - Day-of-Week Lists and Ranges
+
+    [Test]
+    public void ToCron_DayOfWeekList_GeneratesCorrectCronExpression()
+    {
+        // Arrange
+        var natural = "every monday,wednesday,friday at 9am";
+
+        // Act
+        var result = _converter.ToCron(natural);
+
+        // Assert
+        Assert.That(result, Is.TypeOf<ParseResult<string>.Success>(),
+            $"Failed to convert '{natural}' to cron");
+        var success = (ParseResult<string>.Success)result;
+
+        // Expected: "0 9 * * 1,3,5" (Monday=1, Wednesday=3, Friday=5)
+        Assert.That(success.Value, Is.EqualTo("0 9 * * 1,3,5"),
+            "Day-of-week list should generate comma-separated days in cron expression");
+    }
+
+    [Test]
+    public void ToCron_DayOfWeekList_RoundTripThroughNaturalLanguage()
+    {
+        // Arrange
+        var natural = "every monday,wednesday,friday at 9am";
+
+        // Act - Convert to cron and back to natural language
+        var cronResult = _converter.ToCron(natural);
+        Assert.That(cronResult, Is.TypeOf<ParseResult<string>.Success>());
+        var cron = ((ParseResult<string>.Success)cronResult).Value;
+
+        var backToNatural = _converter.ToNaturalLanguage(cron);
+
+        // Assert
+        Assert.That(backToNatural, Is.TypeOf<ParseResult<string>.Success>());
+        var naturalResult = ((ParseResult<string>.Success)backToNatural).Value;
+        Assert.That(naturalResult, Is.EqualTo(natural),
+            "Round-trip conversion through cron should preserve day-of-week list");
+    }
+
+    [Test]
+    public void ToCron_DayOfWeekList_WithoutTime_DefaultsToMidnight()
+    {
+        // Arrange
+        var natural = "every monday,wednesday,friday";
+
+        // Act
+        var result = _converter.ToCron(natural);
+
+        // Assert
+        Assert.That(result, Is.TypeOf<ParseResult<string>.Success>());
+        var success = (ParseResult<string>.Success)result;
+        Assert.That(success.Value, Is.EqualTo("0 0 * * 1,3,5"),
+            "Day-of-week list without time should default to midnight");
+    }
+
+    [Test]
+    public void ToCron_DayOfWeekCustomRange_GeneratesExpandedList()
+    {
+        // Arrange
+        var natural = "every tuesday-thursday at 2pm";
+
+        // Act
+        var result = _converter.ToCron(natural);
+
+        // Assert
+        Assert.That(result, Is.TypeOf<ParseResult<string>.Success>(),
+            $"Failed to convert '{natural}' to cron");
+        var success = (ParseResult<string>.Success)result;
+
+        // Expected: "0 14 * * 2,3,4" (Tuesday=2, Wednesday=3, Thursday=4)
+        // Unix cron doesn't support day ranges, so we expand to a list
+        Assert.That(success.Value, Is.EqualTo("0 14 * * 2,3,4"),
+            "Day-of-week range should be expanded to comma-separated list");
+    }
+
+    [Test]
+    public void ToCron_DayOfWeekCustomRange_RoundTripThroughNaturalLanguage()
+    {
+        // Arrange
+        var natural = "every tuesday-thursday at 2pm";
+
+        // Act - Convert to cron and back to natural language
+        var cronResult = _converter.ToCron(natural);
+        Assert.That(cronResult, Is.TypeOf<ParseResult<string>.Success>());
+        var cron = ((ParseResult<string>.Success)cronResult).Value;
+
+        var backToNatural = _converter.ToNaturalLanguage(cron);
+
+        // Assert
+        Assert.That(backToNatural, Is.TypeOf<ParseResult<string>.Success>());
+        var naturalResult = ((ParseResult<string>.Success)backToNatural).Value;
+        Assert.That(naturalResult, Is.EqualTo(natural),
+            "Round-trip conversion through cron should preserve day-of-week range");
+    }
+
+    [Test]
+    public void ToCron_DayOfWeekRange_Wraparound_ExpandsCorrectly()
+    {
+        // Arrange - Friday to Monday wraps around the week
+        var natural = "every friday-monday at 10am";
+
+        // Act
+        var result = _converter.ToCron(natural);
+
+        // Assert
+        Assert.That(result, Is.TypeOf<ParseResult<string>.Success>());
+        var success = (ParseResult<string>.Success)result;
+
+        // Expected: "0 10 * * 5,6,0,1" (Friday=5, Saturday=6, Sunday=0, Monday=1)
+        Assert.That(success.Value, Is.EqualTo("0 10 * * 5,6,0,1"),
+            "Wraparound day-of-week range should expand to correct sequence");
+    }
+
+    [TestCase("every monday,wednesday,friday in january at 3pm", "0 15 * 1 1,3,5")]
+    [TestCase("every tuesday-thursday in june", "0 0 * 6 2,3,4")]
+    [TestCase("every saturday,sunday", "0 0 * * 6,0")]  // Weekends as explicit list
+    public void ToCron_DayOfWeekListAndRange_WithMonths_GeneratesCorrectExpression(string natural, string expectedCron)
+    {
+        // Act
+        var result = _converter.ToCron(natural);
+
+        // Assert
+        Assert.That(result, Is.TypeOf<ParseResult<string>.Success>(),
+            $"Failed to convert '{natural}' to cron");
+        var success = (ParseResult<string>.Success)result;
+        Assert.That(success.Value, Is.EqualTo(expectedCron),
+            $"Incorrect cron expression for '{natural}'");
+    }
+
+    #endregion
 }

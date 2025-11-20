@@ -16,6 +16,9 @@ internal sealed record DayConstraints
     public int? DayStart { get; init; }
     public int? DayEnd { get; init; }
     public int? DayStep { get; init; }
+    public IReadOnlyList<DayOfWeek>? DayOfWeekList { get; init; }
+    public DayOfWeek? DayOfWeekStart { get; init; }
+    public DayOfWeek? DayOfWeekEnd { get; init; }
 }
 
 /// <summary>

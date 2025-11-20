@@ -110,6 +110,24 @@ internal sealed record ScheduleSpec
     public DayPattern? DayPattern { get; init; }
 
     /// <summary>
+    /// List of specific days of week: "every monday,wednesday,friday"
+    /// Null if not specified
+    /// </summary>
+    public IReadOnlyList<DayOfWeek>? DayOfWeekList { get; init; }
+
+    /// <summary>
+    /// Start day of custom day-of-week range: "every tuesday-thursday"
+    /// Must be paired with DayOfWeekEnd. Null if not specified.
+    /// </summary>
+    public DayOfWeek? DayOfWeekStart { get; init; }
+
+    /// <summary>
+    /// End day of custom day-of-week range: "every tuesday-thursday"
+    /// Must be paired with DayOfWeekStart. Null if not specified.
+    /// </summary>
+    public DayOfWeek? DayOfWeekEnd { get; init; }
+
+    /// <summary>
     /// Day of month (1-31) - null if not specified
     /// Used with monthly intervals: "1M on 15 at 2pm" = 15th of month
     /// Context-aware: "on" with months means day-of-month, with weeks means day-of-week

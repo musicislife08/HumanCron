@@ -3,6 +3,8 @@ using HumanCron.Quartz.Helpers;
 using HumanCron.Utilities;
 using Quartz;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using NaturalIntervalUnit = HumanCron.Models.Internal.IntervalUnit;
 
 namespace HumanCron.Quartz;
@@ -161,7 +163,9 @@ internal sealed class QuartzCronBuilder
         }
 
         // Day-of-month (1-31) - only use when NOT using day-of-week
-        if (spec.DayOfWeek.HasValue || spec.DayPattern.HasValue || spec.NthOccurrence.HasValue || spec.IsLastDayOfWeek)
+        if (spec.DayOfWeek.HasValue || spec.DayOfWeekList is { Count: > 0 } ||
+            spec is { DayOfWeekStart: not null, DayOfWeekEnd: not null } ||
+            spec.DayPattern.HasValue || spec.NthOccurrence.HasValue || spec.IsLastDayOfWeek)
         {
             return "?";  // Use ? when day-of-week is specified (Quartz requirement)
         }
@@ -213,6 +217,20 @@ internal sealed class QuartzCronBuilder
             }
         }
 
+        // Day-of-week list (e.g., "every monday,wednesday,friday" → "MON,WED,FRI")
+        if (spec.DayOfWeekList is { Count: > 0 } dayList)
+        {
+            var dayNames = dayList.Select(ConvertDayOfWeek);
+            return string.Join(",", dayNames);
+        }
+
+        // Day-of-week custom range (e.g., "every tuesday-thursday" → "TUE,WED,THU")
+        if (spec is { DayOfWeekStart: not null, DayOfWeekEnd: not null })
+        {
+            var days = ExpandDayOfWeekRange(spec.DayOfWeekStart.Value, spec.DayOfWeekEnd.Value);
+            return string.Join(",", days.Select(ConvertDayOfWeek));
+        }
+
         // Day-of-week (SUN-SAT or 1-7)
         if (spec.DayPattern.HasValue)
         {
@@ -227,6 +245,37 @@ internal sealed class QuartzCronBuilder
         return spec.DayOfWeek.HasValue ? ConvertDayOfWeek(spec.DayOfWeek.Value) :
             // If using day-of-month, use ?
             "?"; // No specific day-of-week
+    }
+
+    /// <summary>
+    /// Expand day-of-week range to list of days
+    /// Handles wraparound: Friday-Monday → [Friday, Saturday, Sunday, Monday]
+    /// </summary>
+    private static IEnumerable<DayOfWeek> ExpandDayOfWeekRange(DayOfWeek start, DayOfWeek end)
+    {
+        var startNum = (int)start;
+        var endNum = (int)end;
+
+        if (startNum <= endNum)
+        {
+            // Simple range: Tuesday-Thursday = [2,3,4]
+            for (int i = startNum; i <= endNum; i++)
+            {
+                yield return (DayOfWeek)i;
+            }
+        }
+        else
+        {
+            // Wraparound: Friday-Monday = [5,6,0,1]
+            for (int i = startNum; i <= 6; i++)
+            {
+                yield return (DayOfWeek)i;
+            }
+            for (int i = 0; i <= endNum; i++)
+            {
+                yield return (DayOfWeek)i;
+            }
+        }
     }
 
     private static string ConvertDayOfWeek(DayOfWeek day)

@@ -251,6 +251,20 @@ internal sealed class UnixCronBuilder
 
     private string GetDayOfWeekPart(ScheduleSpec spec)
     {
+        // Day-of-week list (e.g., "every monday,wednesday,friday" → "1,3,5")
+        if (spec.DayOfWeekList is { Count: > 0 } dayList)
+        {
+            var dayNumbers = dayList.Select(ConvertDayOfWeek);
+            return string.Join(",", dayNumbers);
+        }
+
+        // Day-of-week custom range (e.g., "every tuesday-thursday" → "2,3,4")
+        if (spec is { DayOfWeekStart: not null, DayOfWeekEnd: not null })
+        {
+            var days = ExpandDayOfWeekRange(spec.DayOfWeekStart.Value, spec.DayOfWeekEnd.Value);
+            return string.Join(",", days.Select(ConvertDayOfWeek));
+        }
+
         // Day-of-week (0-7, both 0 and 7 = Sunday)
         if (spec.DayPattern.HasValue)
         {
@@ -275,6 +289,37 @@ internal sealed class UnixCronBuilder
         return ConvertDayOfWeek(bclDayOfWeek);
 
         // No specific day-of-week constraint
+    }
+
+    /// <summary>
+    /// Expand day-of-week range to list of days
+    /// Handles wraparound: Friday-Monday → [Friday, Saturday, Sunday, Monday]
+    /// </summary>
+    private static IEnumerable<DayOfWeek> ExpandDayOfWeekRange(DayOfWeek start, DayOfWeek end)
+    {
+        var startNum = (int)start;
+        var endNum = (int)end;
+
+        if (startNum <= endNum)
+        {
+            // Simple range: Tuesday-Thursday = [2,3,4]
+            for (int i = startNum; i <= endNum; i++)
+            {
+                yield return (DayOfWeek)i;
+            }
+        }
+        else
+        {
+            // Wraparound: Friday-Monday = [5,6,0,1]
+            for (int i = startNum; i <= 6; i++)
+            {
+                yield return (DayOfWeek)i;
+            }
+            for (int i = 0; i <= endNum; i++)
+            {
+                yield return (DayOfWeek)i;
+            }
+        }
     }
 
     /// <summary>

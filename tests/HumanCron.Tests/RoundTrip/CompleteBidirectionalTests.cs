@@ -542,7 +542,6 @@ public class CompleteBidirectionalTests
 
         // Should format as list of days
         Assert.That(formatted, Is.EqualTo(natural));
-        // Note: DayOfWeekList might not exist yet - this test will reveal the structure
     }
 
     [Test]
