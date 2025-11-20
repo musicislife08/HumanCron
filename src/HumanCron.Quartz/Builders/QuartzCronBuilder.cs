@@ -1,7 +1,10 @@
 using HumanCron.Models.Internal;
 using HumanCron.Quartz.Helpers;
+using HumanCron.Utilities;
 using Quartz;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using NaturalIntervalUnit = HumanCron.Models.Internal.IntervalUnit;
 
 namespace HumanCron.Quartz;
@@ -26,7 +29,7 @@ internal sealed class QuartzCronBuilder
 
     private static string BuildCronExpression(ScheduleSpec spec)
     {
-        // Quartz cron format: second minute hour day month dayOfWeek
+        // Quartz cron format: second minute hour day month dayOfWeek [year]
         var second = GetSecondPart(spec);
         var minute = GetMinutePart(spec);
         var hour = GetHourPart(spec);
@@ -34,7 +37,9 @@ internal sealed class QuartzCronBuilder
         var month = GetMonthPart(spec);
         var dayOfWeek = GetDayOfWeekPart(spec);
 
-        return $"{second} {minute} {hour} {day} {month} {dayOfWeek}";
+        // Optional 7th field: year (1970-2099)
+        return spec.Year.HasValue ? $"{second} {minute} {hour} {day} {month} {dayOfWeek} {spec.Year.Value}" : 
+            $"{second} {minute} {hour} {day} {month} {dayOfWeek}";
     }
 
     private static string GetSecondPart(ScheduleSpec spec)
@@ -48,6 +53,19 @@ internal sealed class QuartzCronBuilder
 
     private static string GetMinutePart(ScheduleSpec spec)
     {
+        // Minute list (0,15,30,45) - compact consecutive sequences to ranges
+        if (spec.MinuteList is { Count: > 0 })
+        {
+            return CronFormatHelpers.CompactList(spec.MinuteList);
+        }
+
+        // Minute range (0-30) or range+step (0-30/5)
+        if (spec is { MinuteStart: not null, MinuteEnd: not null })
+        {
+            var range = $"{spec.MinuteStart.Value}-{spec.MinuteEnd.Value}";
+            return spec.MinuteStep.HasValue ? $"{range}/{spec.MinuteStep.Value}" : range;
+        }
+
         if (spec.Unit == NaturalIntervalUnit.Seconds)
         {
             return "*";  // Every minute when using seconds
@@ -69,37 +87,85 @@ internal sealed class QuartzCronBuilder
 
     private static string GetHourPart(ScheduleSpec spec)
     {
-        if (spec.Unit == NaturalIntervalUnit.Seconds || spec.Unit == NaturalIntervalUnit.Minutes)
+        // Hour list (9,12,15,18) - compact consecutive sequences to ranges
+        if (spec.HourList is { Count: > 0 })
         {
-            return "*";  // Every hour for sub-hourly intervals
+            return CronFormatHelpers.CompactList(spec.HourList);
         }
 
-        if (spec.Unit == NaturalIntervalUnit.Hours)
+        // Hour range (9-17) or range+step (9-17/2)
+        if (spec is { HourStart: not null, HourEnd: not null })
         {
+            var range = $"{spec.HourStart.Value}-{spec.HourEnd.Value}";
+            return spec.HourStep.HasValue ? $"{range}/{spec.HourStep.Value}" : range;
+        }
+
+        switch (spec.Unit)
+        {
+            case NaturalIntervalUnit.Seconds:
+            case NaturalIntervalUnit.Minutes:
+                return "*";  // Every hour for sub-hourly intervals
             // If time specified, it's the starting hour with interval
-            if (spec.TimeOfDay.HasValue)
+            case NaturalIntervalUnit.Hours when spec.TimeOfDay.HasValue:
             {
                 var startHour = spec.TimeOfDay.Value.Hour;
                 return spec.Interval == 1
                     ? "*"
                     : $"{startHour}/{spec.Interval}";
             }
-            return spec.Interval == 1 ? "*" : $"*/{spec.Interval}";
+            case NaturalIntervalUnit.Hours:
+                return spec.Interval == 1 ? "*" : $"*/{spec.Interval}";
         }
 
         // For daily/weekly, use specified time or midnight
-        if (spec.TimeOfDay.HasValue)
-        {
-            return spec.TimeOfDay.Value.Hour.ToString();
-        }
-
-        return "0";  // Default to midnight
+        return spec.TimeOfDay.HasValue ? spec.TimeOfDay.Value.Hour.ToString() : "0"; // Default to midnight
     }
 
     private static string GetDayPart(ScheduleSpec spec)
     {
+        // Day list (1,15,30) - compact consecutive sequences to ranges
+        if (spec.DayList is { Count: > 0 })
+        {
+            return CronFormatHelpers.CompactList(spec.DayList);
+        }
+
+        // Day range (1-15) or range+step (1-15/3)
+        if (spec is { DayStart: not null, DayEnd: not null })
+        {
+            var range = $"{spec.DayStart.Value}-{spec.DayEnd.Value}";
+            return spec.DayStep.HasValue ? $"{range}/{spec.DayStep.Value}" : range;
+        }
+
+        // Advanced Quartz features in day field (L, W)
+
+        // Last day offset: "3rd to last day" → "L-3"
+        if (spec.LastDayOffset.HasValue)
+        {
+            return $"L-{spec.LastDayOffset.Value}";
+        }
+
+        // Last weekday: "last weekday" → "LW"
+        if (spec is { IsLastDay: true, IsNearestWeekday: true })
+        {
+            return "LW";
+        }
+
+        // Last day: "last day" → "L"
+        if (spec.IsLastDay)
+        {
+            return "L";
+        }
+
+        // Nearest weekday: "weekday nearest 15" → "15W"
+        if (spec is { IsNearestWeekday: true, DayOfMonth: not null })
+        {
+            return $"{spec.DayOfMonth.Value}W";
+        }
+
         // Day-of-month (1-31) - only use when NOT using day-of-week
-        if (spec.DayOfWeek.HasValue || spec.DayPattern.HasValue)
+        if (spec.DayOfWeek.HasValue || spec.DayOfWeekList is { Count: > 0 } ||
+            spec is { DayOfWeekStart: not null, DayOfWeekEnd: not null } ||
+            spec.DayPattern.HasValue || spec.NthOccurrence.HasValue || spec.IsLastDayOfWeek)
         {
             return "?";  // Use ? when day-of-week is specified (Quartz requirement)
         }
@@ -133,6 +199,38 @@ internal sealed class QuartzCronBuilder
 
     private static string GetDayOfWeekPart(ScheduleSpec spec)
     {
+        // Advanced Quartz features in day-of-week field (#, L)
+
+        switch (spec)
+        {
+            // Nth occurrence: "3rd friday" → "6#3"
+            case { NthOccurrence: not null, DayOfWeek: not null }:
+            {
+                var quartzDay = ConvertDayOfWeekToNumber(spec.DayOfWeek.Value);
+                return $"{quartzDay}#{spec.NthOccurrence.Value}";
+            }
+            // Last occurrence of day-of-week: "last friday" → "6L"
+            case { IsLastDayOfWeek: true, DayOfWeek: not null }:
+            {
+                var quartzDay = ConvertDayOfWeekToNumber(spec.DayOfWeek.Value);
+                return $"{quartzDay}L";
+            }
+        }
+
+        // Day-of-week list (e.g., "every monday,wednesday,friday" → "MON,WED,FRI")
+        if (spec.DayOfWeekList is { Count: > 0 } dayList)
+        {
+            var dayNames = dayList.Select(ConvertDayOfWeek);
+            return string.Join(",", dayNames);
+        }
+
+        // Day-of-week custom range (e.g., "every tuesday-thursday" → "TUE,WED,THU")
+        if (spec is { DayOfWeekStart: not null, DayOfWeekEnd: not null })
+        {
+            var days = ExpandDayOfWeekRange(spec.DayOfWeekStart.Value, spec.DayOfWeekEnd.Value);
+            return string.Join(",", days.Select(ConvertDayOfWeek));
+        }
+
         // Day-of-week (SUN-SAT or 1-7)
         if (spec.DayPattern.HasValue)
         {
@@ -144,13 +242,40 @@ internal sealed class QuartzCronBuilder
             };
         }
 
-        if (spec.DayOfWeek.HasValue)
-        {
-            return ConvertDayOfWeek(spec.DayOfWeek.Value);
-        }
+        return spec.DayOfWeek.HasValue ? ConvertDayOfWeek(spec.DayOfWeek.Value) :
+            // If using day-of-month, use ?
+            "?"; // No specific day-of-week
+    }
 
-        // If using day-of-month, use ?
-        return "?";  // No specific day-of-week
+    /// <summary>
+    /// Expand day-of-week range to list of days
+    /// Handles wraparound: Friday-Monday → [Friday, Saturday, Sunday, Monday]
+    /// </summary>
+    private static IEnumerable<DayOfWeek> ExpandDayOfWeekRange(DayOfWeek start, DayOfWeek end)
+    {
+        var startNum = (int)start;
+        var endNum = (int)end;
+
+        if (startNum <= endNum)
+        {
+            // Simple range: Tuesday-Thursday = [2,3,4]
+            for (int i = startNum; i <= endNum; i++)
+            {
+                yield return (DayOfWeek)i;
+            }
+        }
+        else
+        {
+            // Wraparound: Friday-Monday = [5,6,0,1]
+            for (int i = startNum; i <= 6; i++)
+            {
+                yield return (DayOfWeek)i;
+            }
+            for (int i = 0; i <= endNum; i++)
+            {
+                yield return (DayOfWeek)i;
+            }
+        }
     }
 
     private static string ConvertDayOfWeek(DayOfWeek day)
@@ -168,4 +293,12 @@ internal sealed class QuartzCronBuilder
             _ => throw new InvalidOperationException($"Unknown day of week: {day}")
         };
     }
+
+    private static int ConvertDayOfWeekToNumber(DayOfWeek day)
+    {
+        // Quartz uses 1-7 where 1=Sunday
+        // .NET DayOfWeek uses 0=Sunday, so we add 1
+        return ((int)day) + 1;
+    }
+
 }

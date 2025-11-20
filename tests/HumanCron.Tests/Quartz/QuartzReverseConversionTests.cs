@@ -106,7 +106,7 @@ public class QuartzReverseConversionTests
     [TestCase("")]
     [TestCase("   ")]
     [TestCase("0 0 14 *")]  // Only 4 parts
-    [TestCase("0 0 14 * * ? *")]  // 7 parts
+    [TestCase("0 0 14 * * ? * 2025")]  // 8 parts - too many
     public void ParseCronExpression_InvalidFormat_ReturnsError(string cronExpression)
     {
         // Act

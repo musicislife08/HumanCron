@@ -2,6 +2,7 @@ using HumanCron.Abstractions;
 using HumanCron.Converters.Unix;
 using HumanCron.Formatting;
 using HumanCron.Models;
+using HumanCron.Models.Internal;
 using HumanCron.Parsing;
 using NodaTime;
 using NodaTime.Testing;
@@ -176,6 +177,191 @@ public class UnixCronConverterTests
 
     #endregion
 
+    #region Month Pattern Schedules
+
+    /// <summary>
+    /// Tests for month-based schedules: single months, month ranges, month lists
+    /// </summary>
+    [TestCase("every day in january", "0 0 * 1 *")]
+    [TestCase("every day in december", "0 0 * 12 *")]
+    [TestCase("every day in june at 2pm", "0 14 * 6 *")]
+    [TestCase("every day in february", "0 0 * 2 *")]
+    [TestCase("every day in march", "0 0 * 3 *")]
+    [TestCase("every day in april", "0 0 * 4 *")]
+    [TestCase("every day in may", "0 0 * 5 *")]
+    [TestCase("every day in july", "0 0 * 7 *")]
+    [TestCase("every day in august", "0 0 * 8 *")]
+    [TestCase("every day in september", "0 0 * 9 *")]
+    [TestCase("every day in october", "0 0 * 10 *")]
+    [TestCase("every day in november", "0 0 * 11 *")]
+    public void ToCron_SingleMonth_ReturnsCorrectExpression(string natural, string expectedCron)
+    {
+        // Act
+        var result = _converter.ToCron(natural);
+
+        // Assert
+        Assert.That(result, Is.TypeOf<ParseResult<string>.Success>(),
+            $"Failed to convert '{natural}' to cron");
+        var success = (ParseResult<string>.Success)result;
+        Assert.That(success.Value, Is.EqualTo(expectedCron),
+            $"Incorrect cron expression for '{natural}'");
+    }
+
+    [TestCase("every day between january and march", "0 0 * 1-3 *")]
+    [TestCase("every day between june and august", "0 0 * 6-8 *")]
+    [TestCase("every day between september and december at 9am", "0 9 * 9-12 *")]
+    public void ToCron_MonthRange_ReturnsCorrectExpression(string natural, string expectedCron)
+    {
+        // Act
+        var result = _converter.ToCron(natural);
+
+        // Assert
+        Assert.That(result, Is.TypeOf<ParseResult<string>.Success>(),
+            $"Failed to convert '{natural}' to cron");
+        var success = (ParseResult<string>.Success)result;
+        Assert.That(success.Value, Is.EqualTo(expectedCron),
+            $"Incorrect cron expression for '{natural}'");
+    }
+
+    [TestCase("every day in january,april,july,october", "0 0 * 1,4,7,10 *")]
+    [TestCase("every day in january,july", "0 0 * 1,7 *")]
+    [TestCase("every day in march,june,september,december at 2pm", "0 14 * 3,6,9,12 *")]
+    public void ToCron_MonthList_ReturnsCorrectExpression(string natural, string expectedCron)
+    {
+        // Act
+        var result = _converter.ToCron(natural);
+
+        // Assert
+        Assert.That(result, Is.TypeOf<ParseResult<string>.Success>(),
+            $"Failed to convert '{natural}' to cron");
+        var success = (ParseResult<string>.Success)result;
+        Assert.That(success.Value, Is.EqualTo(expectedCron),
+            $"Incorrect cron expression for '{natural}'");
+    }
+
+    [TestCase("every weekday in january", "0 0 * 1 1-5")]
+    [TestCase("every weekday in january at 9am", "0 9 * 1 1-5")]
+    [TestCase("every monday in june", "0 0 * 6 1")]
+    [TestCase("every monday in june at 3pm", "0 15 * 6 1")]
+    [TestCase("every weekend in december", "0 0 * 12 0,6")]
+    public void ToCron_MonthWithDayOfWeek_ReturnsCorrectExpression(string natural, string expectedCron)
+    {
+        // Act
+        var result = _converter.ToCron(natural);
+
+        // Assert
+        Assert.That(result, Is.TypeOf<ParseResult<string>.Success>(),
+            $"Failed to convert '{natural}' to cron");
+        var success = (ParseResult<string>.Success)result;
+        Assert.That(success.Value, Is.EqualTo(expectedCron),
+            $"Incorrect cron expression for '{natural}'");
+    }
+
+    #endregion
+
+    #region Day-of-Month Schedules
+
+    /// <summary>
+    /// Tests for day-of-month schedules: specific days, day boundaries, day with months
+    /// </summary>
+    [TestCase("every month on 1", "0 0 1 * *")]
+    [TestCase("every month on 15", "0 0 15 * *")]
+    [TestCase("every month on 31", "0 0 31 * *")]
+    [TestCase("every month on 1 at 9am", "0 9 1 * *")]
+    [TestCase("every month on 15 at 2pm", "0 14 15 * *")]
+    [TestCase("every month on 28", "0 0 28 * *")]
+    [TestCase("every month on 29", "0 0 29 * *")]
+    [TestCase("every month on 30", "0 0 30 * *")]
+    [TestCase("every month on 31 at 11pm", "0 23 31 * *")]
+    public void ToCron_DayOfMonth_ReturnsCorrectExpression(string natural, string expectedCron)
+    {
+        // Act
+        var result = _converter.ToCron(natural);
+
+        // Assert
+        Assert.That(result, Is.TypeOf<ParseResult<string>.Success>(),
+            $"Failed to convert '{natural}' to cron");
+        var success = (ParseResult<string>.Success)result;
+        Assert.That(success.Value, Is.EqualTo(expectedCron),
+            $"Incorrect cron expression for '{natural}'");
+    }
+
+    [TestCase("every month on 1 in january", "0 0 1 1 *")]
+    [TestCase("every month on 15 in january,april,july,october", "0 0 15 1,4,7,10 *")]
+    [TestCase("every month on 1 in january,july at 9am", "0 9 1 1,7 *")]
+    public void ToCron_DayOfMonthWithMonthConstraint_ReturnsCorrectExpression(string natural, string expectedCron)
+    {
+        // Act
+        var result = _converter.ToCron(natural);
+
+        // Assert
+        Assert.That(result, Is.TypeOf<ParseResult<string>.Success>(),
+            $"Failed to convert '{natural}' to cron");
+        var success = (ParseResult<string>.Success)result;
+        Assert.That(success.Value, Is.EqualTo(expectedCron),
+            $"Incorrect cron expression for '{natural}'");
+    }
+
+    #endregion
+
+    #region Special Character Combinations
+
+    /// <summary>
+    /// Tests for complex combinations of ranges, times, and constraints
+    /// </summary>
+    [TestCase("every weekday at 2:30pm", "30 14 * * 1-5")]
+    [TestCase("every weekday at 9:15am", "15 9 * * 1-5")]
+    [TestCase("every hour at 12:15am", "15 * * * *")]
+    [TestCase("every hour at 12:30am", "30 * * * *")]
+    [TestCase("every hour at 12:45am", "45 * * * *")]
+    [TestCase("every weekday in june at 9am", "0 9 * 6 1-5")]
+    [TestCase("every monday in january,april,july,october at 2pm", "0 14 * 1,4,7,10 1")]
+    [TestCase("every month on 15 in june at 3pm", "0 15 15 6 *")]
+    public void ToCron_SpecialCharacterCombinations_ReturnsCorrectExpression(string natural, string expectedCron)
+    {
+        // Act
+        var result = _converter.ToCron(natural);
+
+        // Assert
+        Assert.That(result, Is.TypeOf<ParseResult<string>.Success>(),
+            $"Failed to convert '{natural}' to cron");
+        var success = (ParseResult<string>.Success)result;
+        Assert.That(success.Value, Is.EqualTo(expectedCron),
+            $"Incorrect cron expression for '{natural}'");
+    }
+
+    #endregion
+
+    #region Field Boundary Values
+
+    /// <summary>
+    /// Tests for boundary values in each cron field: minutes (0-59), hours (0-23), days (1-31), months (1-12)
+    /// </summary>
+    [TestCase("every hour at 12:59am", "59 * * * *")]  // Max minute
+    [TestCase("every day at 23:59", "59 23 * * *")]  // Max hour + minute
+    [TestCase("every month on 1 at 12am", "0 0 1 * *")]  // Min day
+    [TestCase("every month on 31 at 12am", "0 0 31 * *")]  // Max day
+    [TestCase("every day in january at 12am", "0 0 * 1 *")]  // Min month (Jan)
+    [TestCase("every day in december at 12am", "0 0 * 12 *")]  // Max month (Dec)
+    [TestCase("every month on 31 in december at 23:59", "59 23 31 12 *")]  // All max values
+    [TestCase("every month on 1 in january at 12am", "0 0 1 1 *")]  // All min values
+    [TestCase("every day at 12:00am", "0 0 * * *")]  // Midnight with explicit minutes
+    [TestCase("every day at 12:00pm", "0 12 * * *")]  // Noon with explicit minutes
+    public void ToCron_FieldBoundaryValues_ReturnsCorrectExpression(string natural, string expectedCron)
+    {
+        // Act
+        var result = _converter.ToCron(natural);
+
+        // Assert
+        Assert.That(result, Is.TypeOf<ParseResult<string>.Success>(),
+            $"Failed to convert '{natural}' to cron");
+        var success = (ParseResult<string>.Success)result;
+        Assert.That(success.Value, Is.EqualTo(expectedCron),
+            $"Incorrect cron expression for '{natural}'");
+    }
+
+    #endregion
+
     #region Invalid Input Tests
 
     [TestCase("")]
@@ -226,6 +412,383 @@ public class UnixCronConverterTests
         Assert.That(error.Message, Is.Not.Empty);
         Assert.That(error.Message, Does.Not.Contain("Exception"), "Should be user-friendly");
         Assert.That(error.Message, Does.Not.Contain("StackTrace"), "Should not leak implementation details");
+    }
+
+    /// <summary>
+    /// Tests for invalid field values: minutes > 59, hours > 23, days > 31 or < 1, etc.
+    /// </summary>
+    [Test]
+    public void ToCron_InvalidFieldValues_ReturnsError()
+    {
+        // Minute > 59
+        var result = _converter.ToCron("every hour at 12:60am");
+        Assert.That(result, Is.TypeOf<ParseResult<string>.Error>(),
+            "Minute value 60 should be rejected (max is 59)");
+
+        // Hour > 23 (24-hour format)
+        result = _converter.ToCron("every day at 25:00");
+        Assert.That(result, Is.TypeOf<ParseResult<string>.Error>(),
+            "Hour value 25 should be rejected (max is 23 in 24-hour format)");
+
+        // Hour 24
+        result = _converter.ToCron("every day at 24:00");
+        Assert.That(result, Is.TypeOf<ParseResult<string>.Error>(),
+            "Hour value 24 should be rejected (max is 23)");
+
+        // Day > 31
+        result = _converter.ToCron("every month on 32");
+        Assert.That(result, Is.TypeOf<ParseResult<string>.Error>(),
+            "Day value 32 should be rejected (max is 31)");
+
+        // Day < 1
+        result = _converter.ToCron("every month on 0");
+        Assert.That(result, Is.TypeOf<ParseResult<string>.Error>(),
+            "Day value 0 should be rejected (min is 1)");
+    }
+
+    [TestCase("every day at 13pm")]  // Invalid 12-hour format
+    [TestCase("every day at 24:00")]  // Hour 24 invalid
+    [TestCase("every month on 0")]  // Day 0 invalid
+    [TestCase("every month on 32")]  // Day 32 invalid
+    [TestCase("every hour at 12:60am")]  // Minute 60 invalid
+    [TestCase("every day at 2:99am")]  // Minute 99 invalid
+    public void ToCron_InvalidFieldValueVariations_ReturnsError(string invalid)
+    {
+        // Act
+        var result = _converter.ToCron(invalid);
+
+        // Assert
+        Assert.That(result, Is.TypeOf<ParseResult<string>.Error>(),
+            $"Expected error for invalid input: '{invalid}'");
+        var error = (ParseResult<string>.Error)result;
+        Assert.That(error.Message, Is.Not.Empty);
+    }
+
+    #endregion
+
+    #region Range Support Tests
+
+    /// <summary>
+    /// Tests for minute/hour/day range support in Unix cron expressions
+    /// These test round-trip parsing and building of range expressions
+    /// </summary>
+
+    // ========================================
+    // Hour Range Tests
+    // ========================================
+
+    [TestCase("0 9-17 * * *", 9, 17, Description = "Business hours (9am-5pm)")]
+    [TestCase("0 0-23 * * *", 0, 23, Description = "Full day (midnight-11pm)")]
+    [TestCase("0 14-14 * * *", 14, 14, Description = "Single hour range")]
+    [TestCase("0 22-6 * * *", 22, 6, Description = "Night hours (wraps midnight)")]
+    [TestCase("0 6-18 * * *", 6, 18, Description = "Day hours (6am-6pm)")]
+    public void Parse_HourRange_ReturnsCorrectScheduleSpec(string cron, int expectedStart, int expectedEnd)
+    {
+        // Arrange
+        var parser = new UnixCronParser();
+
+        // Act
+        var result = parser.Parse(cron);
+
+        // Assert
+        Assert.That(result, Is.TypeOf<ParseResult<ScheduleSpec>.Success>(),
+            $"Failed to parse hour range: {cron}");
+        var success = (ParseResult<ScheduleSpec>.Success)result;
+        Assert.That(success.Value.HourStart, Is.EqualTo(expectedStart),
+            $"Hour start should be {expectedStart}");
+        Assert.That(success.Value.HourEnd, Is.EqualTo(expectedEnd),
+            $"Hour end should be {expectedEnd}");
+    }
+
+    [TestCase("0 9-17 * * *", Description = "Business hours (9am-5pm)")]
+    [TestCase("0 0-23 * * *", Description = "Full day (midnight-11pm)")]
+    [TestCase("0 22-6 * * *", Description = "Night hours (wraps midnight)")]
+    public void RoundTrip_HourRange_PreservesCronExpression(string originalCron)
+    {
+        // Arrange
+        var parser = new UnixCronParser();
+        var builder = UnixCronBuilder.Create();
+
+        // Act - Parse cron → ScheduleSpec
+        var parseResult = parser.Parse(originalCron);
+        Assert.That(parseResult, Is.TypeOf<ParseResult<ScheduleSpec>.Success>(),
+            $"Failed to parse: {originalCron}");
+        var spec = ((ParseResult<ScheduleSpec>.Success)parseResult).Value;
+
+        // Act - Build ScheduleSpec → cron
+        var buildResult = builder.Build(spec);
+
+        // Assert
+        Assert.That(buildResult, Is.TypeOf<ParseResult<string>.Success>(),
+            "Failed to build cron from parsed spec");
+        var cron = ((ParseResult<string>.Success)buildResult).Value;
+        Assert.That(cron, Is.EqualTo(originalCron),
+            $"Round-trip should preserve cron expression: '{originalCron}' → '{cron}'");
+    }
+
+    // ========================================
+    // Minute Range Tests
+    // ========================================
+
+    [TestCase("0-30 * * * *", 0, 30, Description = "First half hour")]
+    [TestCase("30-59 * * * *", 30, 59, Description = "Last half hour")]
+    [TestCase("15-45 * * * *", 15, 45, Description = "Quarter hours")]
+    [TestCase("0-59 * * * *", 0, 59, Description = "Full hour")]
+    [TestCase("0-0 * * * *", 0, 0, Description = "Single minute range")]
+    public void Parse_MinuteRange_ReturnsCorrectScheduleSpec(string cron, int expectedStart, int expectedEnd)
+    {
+        // Arrange
+        var parser = new UnixCronParser();
+
+        // Act
+        var result = parser.Parse(cron);
+
+        // Assert
+        Assert.That(result, Is.TypeOf<ParseResult<ScheduleSpec>.Success>(),
+            $"Failed to parse minute range: {cron}");
+        var success = (ParseResult<ScheduleSpec>.Success)result;
+        Assert.That(success.Value.MinuteStart, Is.EqualTo(expectedStart),
+            $"Minute start should be {expectedStart}");
+        Assert.That(success.Value.MinuteEnd, Is.EqualTo(expectedEnd),
+            $"Minute end should be {expectedEnd}");
+    }
+
+    [TestCase("0-30 * * * *", Description = "First half hour")]
+    [TestCase("30-59 * * * *", Description = "Last half hour")]
+    [TestCase("15-45 * * * *", Description = "Quarter hours")]
+    public void RoundTrip_MinuteRange_PreservesCronExpression(string originalCron)
+    {
+        // Arrange
+        var parser = new UnixCronParser();
+        var builder = UnixCronBuilder.Create();
+
+        // Act - Parse cron → ScheduleSpec
+        var parseResult = parser.Parse(originalCron);
+        Assert.That(parseResult, Is.TypeOf<ParseResult<ScheduleSpec>.Success>(),
+            $"Failed to parse: {originalCron}");
+        var spec = ((ParseResult<ScheduleSpec>.Success)parseResult).Value;
+
+        // Act - Build ScheduleSpec → cron
+        var buildResult = builder.Build(spec);
+
+        // Assert
+        Assert.That(buildResult, Is.TypeOf<ParseResult<string>.Success>(),
+            "Failed to build cron from parsed spec");
+        var cron = ((ParseResult<string>.Success)buildResult).Value;
+        Assert.That(cron, Is.EqualTo(originalCron),
+            $"Round-trip should preserve cron expression: '{originalCron}' → '{cron}'");
+    }
+
+    // ========================================
+    // Day Range Tests
+    // ========================================
+
+    [TestCase("0 0 1-15 * *", 1, 15, Description = "First half of month")]
+    [TestCase("0 0 16-31 * *", 16, 31, Description = "Second half of month")]
+    [TestCase("0 0 1-7 * *", 1, 7, Description = "First week")]
+    [TestCase("0 0 15-15 * *", 15, 15, Description = "Single day range")]
+    [TestCase("0 0 1-31 * *", 1, 31, Description = "Full month")]
+    public void Parse_DayRange_ReturnsCorrectScheduleSpec(string cron, int expectedStart, int expectedEnd)
+    {
+        // Arrange
+        var parser = new UnixCronParser();
+
+        // Act
+        var result = parser.Parse(cron);
+
+        // Assert
+        Assert.That(result, Is.TypeOf<ParseResult<ScheduleSpec>.Success>(),
+            $"Failed to parse day range: {cron}");
+        var success = (ParseResult<ScheduleSpec>.Success)result;
+        Assert.That(success.Value.DayStart, Is.EqualTo(expectedStart),
+            $"Day start should be {expectedStart}");
+        Assert.That(success.Value.DayEnd, Is.EqualTo(expectedEnd),
+            $"Day end should be {expectedEnd}");
+    }
+
+    [TestCase("0 0 1-15 * *", Description = "First half of month")]
+    [TestCase("0 0 16-31 * *", Description = "Second half of month")]
+    [TestCase("0 0 1-7 * *", Description = "First week")]
+    public void RoundTrip_DayRange_PreservesCronExpression(string originalCron)
+    {
+        // Arrange
+        var parser = new UnixCronParser();
+        var builder = UnixCronBuilder.Create();
+
+        // Act - Parse cron → ScheduleSpec
+        var parseResult = parser.Parse(originalCron);
+        Assert.That(parseResult, Is.TypeOf<ParseResult<ScheduleSpec>.Success>(),
+            $"Failed to parse: {originalCron}");
+        var spec = ((ParseResult<ScheduleSpec>.Success)parseResult).Value;
+
+        // Act - Build ScheduleSpec → cron
+        var buildResult = builder.Build(spec);
+
+        // Assert
+        Assert.That(buildResult, Is.TypeOf<ParseResult<string>.Success>(),
+            "Failed to build cron from parsed spec");
+        var cron = ((ParseResult<string>.Success)buildResult).Value;
+        Assert.That(cron, Is.EqualTo(originalCron),
+            $"Round-trip should preserve cron expression: '{originalCron}' → '{cron}'");
+    }
+
+    // ========================================
+    // Combined Range Tests
+    // ========================================
+
+    [TestCase("15-45 9-17 * * *", "Minutes 15-45 during business hours")]
+    [TestCase("0-30 9-17 1-15 * *", "Complex multi-range (minutes, hours, days)")]
+    [TestCase("0-59 0-23 1-31 * *", "Full ranges across all fields")]
+    [TestCase("0-30 22-6 * * *", "Minutes 0-30 during night hours")]
+    [TestCase("15-45 * 1-15 * *", "Minutes 15-45, first half of month")]
+    public void Parse_CombinedRanges_ReturnsCorrectScheduleSpec(string cron, string description)
+    {
+        // Arrange
+        var parser = new UnixCronParser();
+
+        // Act
+        var result = parser.Parse(cron);
+
+        // Assert
+        Assert.That(result, Is.TypeOf<ParseResult<ScheduleSpec>.Success>(),
+            $"Failed to parse combined ranges ({description}): {cron}");
+        var success = (ParseResult<ScheduleSpec>.Success)result;
+
+        // Verify ranges are parsed correctly
+        var parts = cron.Split(' ');
+        if (parts[0].Contains('-'))
+        {
+            var minuteParts = parts[0].Split('-');
+            Assert.That(success.Value.MinuteStart, Is.EqualTo(int.Parse(minuteParts[0])));
+            Assert.That(success.Value.MinuteEnd, Is.EqualTo(int.Parse(minuteParts[1])));
+        }
+        if (parts[1].Contains('-'))
+        {
+            var hourParts = parts[1].Split('-');
+            Assert.That(success.Value.HourStart, Is.EqualTo(int.Parse(hourParts[0])));
+            Assert.That(success.Value.HourEnd, Is.EqualTo(int.Parse(hourParts[1])));
+        }
+        if (parts[2].Contains('-'))
+        {
+            var dayParts = parts[2].Split('-');
+            Assert.That(success.Value.DayStart, Is.EqualTo(int.Parse(dayParts[0])));
+            Assert.That(success.Value.DayEnd, Is.EqualTo(int.Parse(dayParts[1])));
+        }
+    }
+
+    [TestCase("15-45 9-17 * * *", Description = "Minutes 15-45 during business hours")]
+    [TestCase("0-30 9-17 1-15 * *", Description = "Complex multi-range")]
+    public void RoundTrip_CombinedRanges_PreservesCronExpression(string originalCron)
+    {
+        // Arrange
+        var parser = new UnixCronParser();
+        var builder = UnixCronBuilder.Create();
+
+        // Act - Parse cron → ScheduleSpec
+        var parseResult = parser.Parse(originalCron);
+        Assert.That(parseResult, Is.TypeOf<ParseResult<ScheduleSpec>.Success>(),
+            $"Failed to parse: {originalCron}");
+        var spec = ((ParseResult<ScheduleSpec>.Success)parseResult).Value;
+
+        // Act - Build ScheduleSpec → cron
+        var buildResult = builder.Build(spec);
+
+        // Assert
+        Assert.That(buildResult, Is.TypeOf<ParseResult<string>.Success>(),
+            "Failed to build cron from parsed spec");
+        var cron = ((ParseResult<string>.Success)buildResult).Value;
+        Assert.That(cron, Is.EqualTo(originalCron),
+            $"Round-trip should preserve cron expression: '{originalCron}' → '{cron}'");
+    }
+
+    // ========================================
+    // Edge Case Tests
+    // ========================================
+
+    [TestCase("0-0 * * * *", 0, 0, Description = "Min equals max (minute)")]
+    [TestCase("0 23-23 * * *", 23, 23, Description = "Min equals max (hour)")]
+    [TestCase("0 0 31-31 * *", 31, 31, Description = "Min equals max (day)")]
+    public void Parse_SingleValueRange_ReturnsCorrectScheduleSpec(string cron, int expectedValue, int _)
+    {
+        // Arrange
+        var parser = new UnixCronParser();
+
+        // Act
+        var result = parser.Parse(cron);
+
+        // Assert
+        Assert.That(result, Is.TypeOf<ParseResult<ScheduleSpec>.Success>(),
+            $"Failed to parse single-value range: {cron}");
+        var success = (ParseResult<ScheduleSpec>.Success)result;
+
+        // Verify the range start and end are equal
+        if (cron.StartsWith("0-0"))
+        {
+            Assert.That(success.Value.MinuteStart, Is.EqualTo(expectedValue));
+            Assert.That(success.Value.MinuteEnd, Is.EqualTo(expectedValue));
+        }
+        else if (cron.Contains(" 23-23 "))
+        {
+            Assert.That(success.Value.HourStart, Is.EqualTo(expectedValue));
+            Assert.That(success.Value.HourEnd, Is.EqualTo(expectedValue));
+        }
+        else if (cron.Contains(" 31-31 "))
+        {
+            Assert.That(success.Value.DayStart, Is.EqualTo(expectedValue));
+            Assert.That(success.Value.DayEnd, Is.EqualTo(expectedValue));
+        }
+    }
+
+    [TestCase("0 0-23 * * *", Description = "Full hour range (0-23)")]
+    [TestCase("0-59 * * * *", Description = "Full minute range (0-59)")]
+    [TestCase("0 0 1-31 * *", Description = "Full day range (1-31)")]
+    public void Parse_BoundaryRanges_ReturnsCorrectScheduleSpec(string cron)
+    {
+        // Arrange
+        var parser = new UnixCronParser();
+
+        // Act
+        var result = parser.Parse(cron);
+
+        // Assert
+        Assert.That(result, Is.TypeOf<ParseResult<ScheduleSpec>.Success>(),
+            $"Failed to parse boundary range: {cron}");
+        var success = (ParseResult<ScheduleSpec>.Success)result;
+
+        // Verify boundary values
+        if (cron.Contains("0-23"))
+        {
+            Assert.That(success.Value.HourStart, Is.EqualTo(0), "Hour start should be 0");
+            Assert.That(success.Value.HourEnd, Is.EqualTo(23), "Hour end should be 23");
+        }
+        else if (cron.StartsWith("0-59"))
+        {
+            Assert.That(success.Value.MinuteStart, Is.EqualTo(0), "Minute start should be 0");
+            Assert.That(success.Value.MinuteEnd, Is.EqualTo(59), "Minute end should be 59");
+        }
+        else if (cron.Contains("1-31"))
+        {
+            Assert.That(success.Value.DayStart, Is.EqualTo(1), "Day start should be 1");
+            Assert.That(success.Value.DayEnd, Is.EqualTo(31), "Day end should be 31");
+        }
+    }
+
+    [TestCase("0 22-6 * * *", 22, 6, Description = "Hour wraparound (night)")]
+    public void Parse_WraparoundRange_ReturnsCorrectScheduleSpec(string cron, int expectedStart, int expectedEnd)
+    {
+        // Arrange
+        var parser = new UnixCronParser();
+
+        // Act
+        var result = parser.Parse(cron);
+
+        // Assert - Parser accepts wraparound ranges (validation is runtime concern)
+        Assert.That(result, Is.TypeOf<ParseResult<ScheduleSpec>.Success>(),
+            $"Failed to parse wraparound range: {cron}");
+        var success = (ParseResult<ScheduleSpec>.Success)result;
+        Assert.That(success.Value.HourStart, Is.EqualTo(expectedStart));
+        Assert.That(success.Value.HourEnd, Is.EqualTo(expectedEnd),
+            "Wraparound ranges are accepted (22-6 means 10pm to 6am)");
     }
 
     #endregion
@@ -298,6 +861,11 @@ public class UnixCronConverterTests
     [TestCase("every day at 2pm")]
     [TestCase("every monday")]
     [TestCase("every weekday at 9am")]
+    [TestCase("every day in january at 2pm")]
+    [TestCase("every monday in june")]
+    [TestCase("every weekday in december")]
+    [TestCase("every day at 12am")]
+    [TestCase("every weekday at 2:30pm")]
     public void RoundTrip_NaturalToCronToNatural_PreservesSemantics(string original)
     {
         // Act - Natural → Cron
@@ -534,6 +1102,139 @@ public class UnixCronConverterTests
         var success = (ParseResult<string>.Success)result;
         Assert.That(success.Value, Is.EqualTo("0 */6 * * *"),
             "Hourly intervals without specific time shouldn't be affected by timezone");
+    }
+
+    #endregion
+
+    #region Priority 4 Features - Day-of-Week Lists and Ranges
+
+    [Test]
+    public void ToCron_DayOfWeekList_GeneratesCorrectCronExpression()
+    {
+        // Arrange
+        var natural = "every monday,wednesday,friday at 9am";
+
+        // Act
+        var result = _converter.ToCron(natural);
+
+        // Assert
+        Assert.That(result, Is.TypeOf<ParseResult<string>.Success>(),
+            $"Failed to convert '{natural}' to cron");
+        var success = (ParseResult<string>.Success)result;
+
+        // Expected: "0 9 * * 1,3,5" (Monday=1, Wednesday=3, Friday=5)
+        Assert.That(success.Value, Is.EqualTo("0 9 * * 1,3,5"),
+            "Day-of-week list should generate comma-separated days in cron expression");
+    }
+
+    [Test]
+    public void ToCron_DayOfWeekList_RoundTripThroughNaturalLanguage()
+    {
+        // Arrange
+        var natural = "every monday,wednesday,friday at 9am";
+
+        // Act - Convert to cron and back to natural language
+        var cronResult = _converter.ToCron(natural);
+        Assert.That(cronResult, Is.TypeOf<ParseResult<string>.Success>());
+        var cron = ((ParseResult<string>.Success)cronResult).Value;
+
+        var backToNatural = _converter.ToNaturalLanguage(cron);
+
+        // Assert
+        Assert.That(backToNatural, Is.TypeOf<ParseResult<string>.Success>());
+        var naturalResult = ((ParseResult<string>.Success)backToNatural).Value;
+        Assert.That(naturalResult, Is.EqualTo(natural),
+            "Round-trip conversion through cron should preserve day-of-week list");
+    }
+
+    [Test]
+    public void ToCron_DayOfWeekList_WithoutTime_DefaultsToMidnight()
+    {
+        // Arrange
+        var natural = "every monday,wednesday,friday";
+
+        // Act
+        var result = _converter.ToCron(natural);
+
+        // Assert
+        Assert.That(result, Is.TypeOf<ParseResult<string>.Success>());
+        var success = (ParseResult<string>.Success)result;
+        Assert.That(success.Value, Is.EqualTo("0 0 * * 1,3,5"),
+            "Day-of-week list without time should default to midnight");
+    }
+
+    [Test]
+    public void ToCron_DayOfWeekCustomRange_GeneratesExpandedList()
+    {
+        // Arrange
+        var natural = "every tuesday-thursday at 2pm";
+
+        // Act
+        var result = _converter.ToCron(natural);
+
+        // Assert
+        Assert.That(result, Is.TypeOf<ParseResult<string>.Success>(),
+            $"Failed to convert '{natural}' to cron");
+        var success = (ParseResult<string>.Success)result;
+
+        // Expected: "0 14 * * 2,3,4" (Tuesday=2, Wednesday=3, Thursday=4)
+        // Unix cron doesn't support day ranges, so we expand to a list
+        Assert.That(success.Value, Is.EqualTo("0 14 * * 2,3,4"),
+            "Day-of-week range should be expanded to comma-separated list");
+    }
+
+    [Test]
+    public void ToCron_DayOfWeekCustomRange_RoundTripThroughNaturalLanguage()
+    {
+        // Arrange
+        var natural = "every tuesday-thursday at 2pm";
+
+        // Act - Convert to cron and back to natural language
+        var cronResult = _converter.ToCron(natural);
+        Assert.That(cronResult, Is.TypeOf<ParseResult<string>.Success>());
+        var cron = ((ParseResult<string>.Success)cronResult).Value;
+
+        var backToNatural = _converter.ToNaturalLanguage(cron);
+
+        // Assert
+        Assert.That(backToNatural, Is.TypeOf<ParseResult<string>.Success>());
+        var naturalResult = ((ParseResult<string>.Success)backToNatural).Value;
+        Assert.That(naturalResult, Is.EqualTo(natural),
+            "Round-trip conversion through cron should preserve day-of-week range");
+    }
+
+    [Test]
+    public void ToCron_DayOfWeekRange_Wraparound_ExpandsCorrectly()
+    {
+        // Arrange - Friday to Monday wraps around the week
+        var natural = "every friday-monday at 10am";
+
+        // Act
+        var result = _converter.ToCron(natural);
+
+        // Assert
+        Assert.That(result, Is.TypeOf<ParseResult<string>.Success>());
+        var success = (ParseResult<string>.Success)result;
+
+        // Expected: "0 10 * * 5,6,0,1" (Friday=5, Saturday=6, Sunday=0, Monday=1)
+        Assert.That(success.Value, Is.EqualTo("0 10 * * 5,6,0,1"),
+            "Wraparound day-of-week range should expand to correct sequence");
+    }
+
+    [TestCase("every monday,wednesday,friday in january at 3pm", "0 15 * 1 1,3,5")]
+    [TestCase("every tuesday-thursday in june", "0 0 * 6 2,3,4")]
+    [TestCase("every saturday,sunday", "0 0 * * 6,0")]  // Weekends as explicit list
+    public void ToCron_DayOfWeekListAndRange_WithMonths_GeneratesCorrectExpression(string natural, string expectedCron)
+    {
+        // Act
+        var result = _converter.ToCron(natural);
+
+        // Assert
+        Assert.That(result, Is.TypeOf<ParseResult<string>.Success>(),
+            $"Failed to convert '{natural}' to cron");
+        var success = (ParseResult<string>.Success)result;
+        Assert.That(success.Value, Is.EqualTo(expectedCron),
+            $"Incorrect cron expression for '{natural}'");
     }
 
     #endregion

@@ -39,9 +39,16 @@ internal sealed class QuartzScheduleBuilder : IQuartzScheduleBuilder
     /// <summary>
     /// Determines if pattern requires CalendarIntervalSchedule
     /// CalendarInterval needed for: multi-week (2w+), months, years
+    /// UNLESS advanced features (L, W, #) are used - those require CronScheduleBuilder
     /// </summary>
     private static bool RequiresCalendarInterval(ScheduleSpec spec)
     {
+        // Advanced Quartz features (L, W, #) MUST use CronScheduleBuilder
+        if (HasAdvancedQuartzFeatures(spec))
+        {
+            return false;
+        }
+
         return spec.Unit switch
         {
             NaturalIntervalUnit.Weeks when spec.Interval > 1 => true,  // 2w, 3w, 4w, etc.
@@ -49,6 +56,18 @@ internal sealed class QuartzScheduleBuilder : IQuartzScheduleBuilder
             NaturalIntervalUnit.Years => true,                          // All yearly intervals
             _ => false                                                   // Everything else uses cron
         };
+    }
+
+    /// <summary>
+    /// Check if spec uses advanced Quartz-specific features (L, W, #)
+    /// </summary>
+    private static bool HasAdvancedQuartzFeatures(ScheduleSpec spec)
+    {
+        return spec.IsLastDay ||
+               spec.IsLastDayOfWeek ||
+               spec.LastDayOffset.HasValue ||
+               spec.IsNearestWeekday ||
+               spec.NthOccurrence.HasValue;
     }
 
     /// <summary>
@@ -92,15 +111,13 @@ internal sealed class QuartzScheduleBuilder : IQuartzScheduleBuilder
         }
 
         // Handle day-of-month constraint (e.g., "3M on 15")
-        // ReSharper disable once InvertIf
-        if (spec.DayOfMonth.HasValue)
+        if (!spec.DayOfMonth.HasValue) return null;
         {
             var timeZoneInfo = TimeZoneConverter.ToTimeZoneInfo(spec.TimeZone);
             return CalculateNextDayOfMonth(refTime, spec.DayOfMonth.Value, spec.TimeOfDay, timeZoneInfo);
         }
 
         // No constraints, no special start time needed
-        return null;
     }
 
     /// <summary>
