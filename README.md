@@ -1,10 +1,18 @@
-# HumanCron
+<p align="center">
+  <img src="logo.svg" alt="HumanCron Logo" width="400">
+</p>
 
-[![Build Status](https://github.com/musicislife08/HumanCron/workflows/Build%20and%20Test/badge.svg)](https://github.com/musicislife08/HumanCron/actions)
-[![NuGet](https://img.shields.io/nuget/v/HumanCron.svg)](https://www.nuget.org/packages/HumanCron)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+<h1 align="center">HumanCron</h1>
 
-Human-readable cron expression converter with bidirectional support and timezone awareness for .NET. Parse schedules like `"every 30 minutes"`, `"every day at 2pm"`, or `"every monday at 9am"` into Unix cron expressions or Quartz.NET schedules, and convert cron expressions back to natural language.
+<p align="center">
+  <a href="https://github.com/musicislife08/HumanCron/actions"><img src="https://github.com/musicislife08/HumanCron/workflows/Build%20and%20Test/badge.svg" alt="Build Status"></a>
+  <a href="https://www.nuget.org/packages/HumanCron"><img src="https://img.shields.io/nuget/v/HumanCron.svg" alt="NuGet"></a>
+  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
+</p>
+
+<p align="center">
+  Human-readable cron expression converter with bidirectional support and timezone awareness for .NET. Parse schedules like <code>"every 30 minutes"</code>, <code>"every day at 2pm"</code>, or <code>"every monday at 9am"</code> into Unix cron expressions or Quartz.NET schedules, and convert cron expressions back to natural language.
+</p>
 
 ## Features
 

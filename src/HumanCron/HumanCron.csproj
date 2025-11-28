@@ -4,7 +4,12 @@
     <TargetFramework>net10.0</TargetFramework>
     <PackageId>HumanCron</PackageId>
     <Description>Human-readable cron expression converter with full Unix cron specification compliance and bidirectional support. Parse schedules like "every 30 minutes", "every day at 2pm", or "every monday at 9am" into Unix cron expressions and convert back to natural language. Supports complete cron syntax: lists (0,15,30,45), ranges (9-17), steps (*/15, 0-30/5), named values (MON-FRI, JAN-DEC), and mixed syntax. Features smart compaction, zero-allocation Span&lt;T&gt; parsing, NodaTime timezone handling with DST support, and comprehensive month selection.</Description>
+    <PackageIcon>logo-icon.png</PackageIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="logo-icon.png" Pack="true" PackagePath="\" />
+  </ItemGroup>
 
   <ItemGroup>
     <!-- Expose internal types to Quartz extension -->
