@@ -81,24 +81,31 @@ public static class ScheduleBuilderExtensions
     // These provide compile-time checked, zero-overhead access to private members
     // ========================================
 
+    /// <summary>Accesses the private _interval field from ScheduleBuilder</summary>
     [UnsafeAccessor(UnsafeAccessorKind.Field, Name = "_interval")]
     private static extern ref int GetInterval(ScheduleBuilder builder);
 
+    /// <summary>Accesses the private _unit field from ScheduleBuilder</summary>
     [UnsafeAccessor(UnsafeAccessorKind.Field, Name = "_unit")]
     private static extern ref NaturalIntervalUnit GetUnit(ScheduleBuilder builder);
 
+    /// <summary>Accesses the private _dayOfWeek field from ScheduleBuilder</summary>
     [UnsafeAccessor(UnsafeAccessorKind.Field, Name = "_dayOfWeek")]
     private static extern ref DayOfWeek? GetDayOfWeek(ScheduleBuilder builder);
 
+    /// <summary>Accesses the private _dayPattern field from ScheduleBuilder</summary>
     [UnsafeAccessor(UnsafeAccessorKind.Field, Name = "_dayPattern")]
     private static extern ref DayPattern? GetDayPattern(ScheduleBuilder builder);
 
+    /// <summary>Accesses the private _dayOfMonth field from ScheduleBuilder</summary>
     [UnsafeAccessor(UnsafeAccessorKind.Field, Name = "_dayOfMonth")]
     private static extern ref int? GetDayOfMonth(ScheduleBuilder builder);
 
+    /// <summary>Accesses the private _timeOfDay field from ScheduleBuilder</summary>
     [UnsafeAccessor(UnsafeAccessorKind.Field, Name = "_timeOfDay")]
     private static extern ref TimeOnly? GetTimeOfDay(ScheduleBuilder builder);
 
+    /// <summary>Accesses the private _timeZone field from ScheduleBuilder</summary>
     [UnsafeAccessor(UnsafeAccessorKind.Field, Name = "_timeZone")]
     private static extern ref DateTimeZone GetTimeZone(ScheduleBuilder builder);
 

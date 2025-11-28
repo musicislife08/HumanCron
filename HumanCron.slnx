@@ -1,5 +1,7 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/HumanCron.Hangfire/HumanCron.Hangfire.csproj" />
+    <Project Path="src/HumanCron.NCrontab/HumanCron.NCrontab.csproj" />
     <Project Path="src/HumanCron.Quartz/HumanCron.Quartz.csproj" />
     <Project Path="src/HumanCron/HumanCron.csproj" />
   </Folder>

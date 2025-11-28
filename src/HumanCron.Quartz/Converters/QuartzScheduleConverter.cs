@@ -15,6 +15,9 @@ namespace HumanCron.Quartz.Converters;
 /// </summary>
 public sealed class QuartzScheduleConverter : IQuartzScheduleConverter
 {
+    // Maximum input length to prevent DoS attacks via extremely long strings
+    private const int MaxInputLength = 1000;
+
     private readonly IScheduleParser _parser;
     private readonly IScheduleFormatter _formatter;
     private readonly QuartzScheduleBuilder _quartzBuilder;
@@ -65,6 +68,12 @@ public sealed class QuartzScheduleConverter : IQuartzScheduleConverter
         if (string.IsNullOrWhiteSpace(naturalLanguage))
         {
             return new ParseResult<IScheduleBuilder>.Error("Natural language input cannot be empty");
+        }
+
+        if (naturalLanguage.Length > MaxInputLength)
+        {
+            return new ParseResult<IScheduleBuilder>.Error(
+                $"Natural language input exceeds maximum length of {MaxInputLength} characters");
         }
 
         // Use provided timezone or default to server's local timezone
@@ -151,6 +160,12 @@ public sealed class QuartzScheduleConverter : IQuartzScheduleConverter
         if (string.IsNullOrWhiteSpace(naturalLanguage))
         {
             return new ParseResult<TriggerBuilder>.Error("Natural language input cannot be empty");
+        }
+
+        if (naturalLanguage.Length > MaxInputLength)
+        {
+            return new ParseResult<TriggerBuilder>.Error(
+                $"Natural language input exceeds maximum length of {MaxInputLength} characters");
         }
 
         // Get the schedule builder

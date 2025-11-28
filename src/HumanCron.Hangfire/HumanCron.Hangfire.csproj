@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <PackageId>HumanCron.Hangfire</PackageId>
+    <Description>Hangfire integration for HumanCron with natural language job scheduling. Schedule recurring Hangfire jobs using intuitive syntax like "every 30 seconds", "every 15 minutes", or "every weekday at 9am". Provides extension methods for RecurringJob and a fluent API for type-safe job scheduling with CalendarIntervalSchedule support for complex scenarios. Built on top of HumanCron.NCrontab for 6-field cron expression support with seconds precision.</Description>
+    <PackageIcon>logo-icon.png</PackageIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="logo-icon.png" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Expose internal types to test project -->
+    <InternalsVisibleTo Include="HumanCron.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Reference HumanCron for ParseResult types -->
+    <ProjectReference Include="..\HumanCron\HumanCron.csproj" PrivateAssets="All" />
+    <!-- Reference HumanCron.NCrontab for NCrontab conversion -->
+    <ProjectReference Include="..\HumanCron.NCrontab\HumanCron.NCrontab.csproj" PrivateAssets="All" />
+    <!-- Package references for consumers -->
+    <PackageReference Include="HumanCron" Version="[$(Version)]" />
+    <PackageReference Include="HumanCron.NCrontab" Version="[$(Version)]" />
+    <!-- Hangfire core library -->
+    <PackageReference Include="Hangfire.Core" Version="1.8.18" />
+    <!-- Override vulnerable Newtonsoft.Json transitive dependency from Hangfire -->
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+
+</Project>

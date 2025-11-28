@@ -39,6 +39,13 @@ internal sealed partial class UnixCronParser
             var month = parts[3];
             var dayOfWeek = parts[4];
 
+            // Validate field ranges before parsing
+            var validationError = ValidateFields(minute, hour, day, month, dayOfWeek);
+            if (validationError != null)
+            {
+                return new ParseResult<ScheduleSpec>.Error(validationError);
+            }
+
             // Determine interval unit and value based on pattern
             var (interval, unit) = DetermineInterval(minute, hour, day, dayOfWeek);
             if (interval == 0)

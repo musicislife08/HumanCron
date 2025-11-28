@@ -1,0 +1,38 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <PackageId>HumanCron.NCrontab</PackageId>
+    <Description>NCrontab 6-field format support for HumanCron. Convert natural language schedules like "every 30 seconds", "every 15 minutes", or "every day at 2pm" into NCrontab expressions (seconds-based) and convert back to natural language. Supports complete NCrontab syntax including seconds field, lists, ranges, steps, named values, and L (last day) operator. Compatible with Hangfire, Azure Functions Timer Triggers, and any system using NCrontab format. Features smart compaction, zero-allocation Span&lt;T&gt; parsing, NodaTime timezone handling with DST support. Requires exact version match with HumanCron core package.</Description>
+    <PackageIcon>logo-icon.png</PackageIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="logo-icon.png" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Expose internal types to Hangfire extension -->
+    <InternalsVisibleTo Include="HumanCron.Hangfire" />
+    <!-- Expose internal types to test project -->
+    <InternalsVisibleTo Include="HumanCron.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Reference core HumanCron library -->
+    <PackageReference Include="NodaTime" Version="3.2.2" />
+
+    <!-- HumanCron dependency with EXACT version match for synchronized releases -->
+    <!-- Use ProjectReference for local development, PackageReference with exact version for NuGet -->
+    <ProjectReference Include="..\HumanCron\HumanCron.csproj" PrivateAssets="All" />
+    <PackageReference Include="HumanCron" Version="[$(Version)]" />
+    <!-- Brackets [x.y.z] mean "exactly this version only" in NuGet version ranges -->
+
+    <!-- Cronos for NCrontab parsing (6-field support) -->
+    <PackageReference Include="Cronos" Version="0.11.1" />
+
+    <!-- DI abstractions for extension registration -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.0" />
+  </ItemGroup>
+
+</Project>

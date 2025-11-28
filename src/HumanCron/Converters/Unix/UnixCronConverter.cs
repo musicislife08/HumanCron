@@ -20,6 +20,9 @@ namespace HumanCron.Converters.Unix;
 /// </remarks>
 public sealed class UnixCronConverter : IHumanCronConverter
 {
+    // Maximum input length to prevent DoS attacks via extremely long strings
+    private const int MaxInputLength = 1000;
+
     private readonly IScheduleParser _parser;
     private readonly IScheduleFormatter _formatter;
     private readonly UnixCronBuilder _cronBuilder;
@@ -94,6 +97,12 @@ public sealed class UnixCronConverter : IHumanCronConverter
             return new ParseResult<string>.Error("Natural language input cannot be empty");
         }
 
+        if (naturalLanguage.Length > MaxInputLength)
+        {
+            return new ParseResult<string>.Error(
+                $"Natural language input exceeds maximum length of {MaxInputLength} characters");
+        }
+
         // Use provided timezone or default to server's local timezone
         var options = new ScheduleParserOptions
         {
@@ -125,6 +134,12 @@ public sealed class UnixCronConverter : IHumanCronConverter
         if (string.IsNullOrWhiteSpace(cronExpression))
         {
             return new ParseResult<string>.Error("Cron expression cannot be empty");
+        }
+
+        if (cronExpression.Length > MaxInputLength)
+        {
+            return new ParseResult<string>.Error(
+                $"Cron expression exceeds maximum length of {MaxInputLength} characters");
         }
 
         // Step 1: Parse Unix cron → ScheduleSpec

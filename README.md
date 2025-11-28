@@ -19,9 +19,10 @@
 - 🗣️ **Natural Language Parsing** - Human-friendly syntax instead of cryptic cron expressions
 - ⏰ **Timezone Aware** - Proper DST handling using NodaTime
 - 🔄 **Bidirectional** - Convert to/from cron expressions with full specification compliance
-- 🔌 **Quartz.NET Integration** - Direct IScheduleBuilder conversion
+- 🔌 **Multiple Integrations** - Quartz.NET, Hangfire, and NCrontab support
 - 📅 **Month Support** - Select specific months, ranges, or lists
-- 🎯 **Full Cron Spec Support** - Complete Unix (5-field) and Quartz (6-7 field) cron syntax including lists, ranges, steps, named values, and Quartz-specific features (L, W, #)
+- 🎯 **Full Cron Spec Support** - Complete Unix (5-field), NCrontab (6-field), and Quartz (6-7 field) cron syntax including lists, ranges, steps, named values, and Quartz-specific features (L, W, #)
+- ⏱️ **Seconds Precision** - NCrontab and Hangfire support for second-level scheduling
 - ✅ **Well Tested** - Comprehensive test coverage including edge cases, DST handling, and timezone conversions
 - ⚡ **High Performance** - Zero-allocation Span<T> parsing for minimal memory overhead
 - 📦 **Dependency Injection** - First-class DI support
@@ -32,8 +33,14 @@
 # Core library (Unix cron support)
 dotnet add package HumanCron
 
+# NCrontab 6-field cron support (optional - adds seconds precision)
+dotnet add package HumanCron.NCrontab
+
 # Quartz.NET integration (optional)
 dotnet add package HumanCron.Quartz
+
+# Hangfire integration (optional - includes NCrontab support)
+dotnet add package HumanCron.Hangfire
 ```
 
 ## Quick Start
@@ -93,6 +100,68 @@ public class MySchedulingService
         }
     }
 }
+```
+
+### NCrontab 6-Field Conversion
+
+```csharp
+using HumanCron.NCrontab;
+
+var converter = NCrontabConverter.Create();
+
+// Convert to 6-field NCrontab (includes seconds)
+var result = converter.ToNCrontab("every 30 seconds");
+// Returns: "*/30 * * * * *"
+
+result = converter.ToNCrontab("every 15 minutes");
+// Returns: "0 */15 * * * *"
+
+result = converter.ToNCrontab("every day at 2pm");
+// Returns: "0 0 14 * * *"
+
+result = converter.ToNCrontab("every weekday at 9am");
+// Returns: "0 0 9 * * 1-5"
+
+// Convert back to natural language
+var reverseResult = converter.ToNaturalLanguage("0 0 14 * * *");
+// Returns: "every day at 2pm"
+```
+
+### Hangfire Integration
+
+```csharp
+using Hangfire;
+using HumanCron.Hangfire.Extensions;
+
+// Option 1: Use natural language strings directly
+RecurringJob.AddOrUpdate(
+    "my-job-id",
+    "every 30 seconds",
+    () => DoWork()
+);
+
+RecurringJob.AddOrUpdate(
+    "daily-job",
+    "every day at 2pm",
+    () => DailyTask()
+);
+
+// Option 2: Use fluent API with ScheduleBuilder
+Schedule.Every(30).Seconds()
+    .AddOrUpdateHangfireJob("job-id", () => DoWork());
+
+Schedule.Every(1).Day()
+    .At(new TimeOnly(14, 0))
+    .AddOrUpdateHangfireJob("daily-job", () => DailyTask());
+
+Schedule.Every(1).Day()
+    .At(new TimeOnly(9, 0))
+    .OnWeekdays()
+    .AddOrUpdateHangfireJob("weekday-job", () => WeekdayTask());
+
+// Option 3: Convert to NCrontab expression
+var cronExpression = Schedule.Every(15).Minutes().ToNCrontabExpression();
+// Returns: "0 */15 * * * *"
 ```
 
 ### Quartz.NET Integration
@@ -239,6 +308,46 @@ HumanCron provides **full specification compliance** for both Unix and Quartz cr
 0 9 * JAN,APR * MON → every monday in january and april at 9am
 0 0 1,15 * *        → on the 1st and 15th of each month
 0 0 1-15/3 * *      → every 3 days between 1st and 15th
+```
+
+### NCrontab Cron (6-field format)
+
+**Format**: `second minute hour day-of-month month day-of-week`
+
+NCrontab extends Unix cron with a seconds field, enabling second-precision scheduling. Commonly used by **Hangfire** and **Azure Functions**.
+
+**Supported Syntax** (all Unix features plus seconds):
+- **Wildcards**: `*` (any value)
+- **Specific Values**: `5`, `30`, `MON`, `JAN`
+- **Lists**: `0,15,30,45` or `MON,WED,FRI`
+- **Ranges**: `1-5`, `9-17`, `MON-FRI`
+- **Steps**: `*/15`, `0-30/5`, `9-17/2`
+- **Mixed Syntax**: `0-4,8-12,20`
+- **Named Values**: Case-insensitive month and day names
+
+**Examples**:
+```
+*/30 * * * * *          → every 30 seconds
+0 */15 * * * *          → every 15 minutes
+0 0 14 * * *            → every day at 2pm
+0 0 9 * * 1-5           → every weekday at 9am
+0 0 9 * * MON           → every monday at 9am
+0 0 9 * 1 *             → every day in january at 9am
+0 0,15,30,45 * * * *    → every 15 minutes
+0 0-30/5 9-17 * * *     → every 5 minutes in 0-30 range, 9am-5pm
+```
+
+**Bidirectional Conversion**:
+```csharp
+// Natural language → NCrontab
+converter.ToNCrontab("every 30 seconds")     → "*/30 * * * * *"
+converter.ToNCrontab("every 15 minutes")     → "0 */15 * * * *"
+converter.ToNCrontab("every weekday at 9am") → "0 0 9 * * 1-5"
+
+// NCrontab → natural language
+converter.ToNaturalLanguage("*/30 * * * * *")    → "every 30 seconds"
+converter.ToNaturalLanguage("0 */15 * * * *")    → "every 15 minutes"
+converter.ToNaturalLanguage("0 0 9 * * 1-5")     → "every weekday at 9am"
 ```
 
 ### Quartz Cron (6-7 field format)

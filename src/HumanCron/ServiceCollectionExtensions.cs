@@ -18,75 +18,82 @@ namespace HumanCron;
 /// </summary>
 public static class ServiceCollectionExtensions
 {
-    /// <summary>
-    /// Adds HumanCron services to the dependency injection container.
-    /// Automatically discovers and registers extension packages (Quartz.NET, Hangfire, etc.)
-    /// </summary>
     /// <param name="services">The service collection to add services to</param>
-    /// <returns>The service collection for chaining</returns>
-    /// <remarks>
-    /// This method automatically detects installed HumanCron extension packages:
-    /// - Base: Registers Unix 5-part cron converter (industry standard)
-    /// - HumanCron.Quartz: Auto-registers Quartz.NET converter (if package installed)
-    ///
-    /// No additional configuration needed - just install the package and call AddHumanCron()
-    /// </remarks>
-    /// <example>
-    /// <code>
-    /// // Works with base package only OR with Quartz extension installed
-    /// using HumanCron;
-    ///
-    /// services.AddHumanCron();
-    ///
-    /// // Then inject and use:
-    /// public class MyService
-    /// {
-    ///     private readonly IHumanCronConverter _converter;
-    ///
-    ///     public MyService(IHumanCronConverter converter)
-    ///     {
-    ///         _converter = converter;
-    ///     }
-    ///
-    ///     public void ConvertSchedule()
-    ///     {
-    ///         // Natural language → Unix cron
-    ///         var result = _converter.ToCron("1d at 2pm");
-    ///         if (result is ParseResult&lt;string&gt;.Success success)
-    ///         {
-    ///             Console.WriteLine(success.Value); // "0 14 * * *"
-    ///         }
-    ///
-    ///         // Unix cron → Natural language
-    ///         var reverse = _converter.ToNaturalLanguage("0 14 * * *");
-    ///         if (reverse is ParseResult&lt;string&gt;.Success reverseSuccess)
-    ///         {
-    ///             Console.WriteLine(reverseSuccess.Value); // "1d at 2pm"
-    ///         }
-    ///     }
-    /// }
-    /// </code>
-    /// </example>
-    public static IServiceCollection AddHumanCron(this IServiceCollection services)
+    extension(IServiceCollection services)
     {
-        // Register NodaTime dependencies if not already registered
-        // TryAddSingleton allows users to override with custom implementations
-        services.TryAddSingleton<IClock>(SystemClock.Instance);
-        services.TryAddSingleton<DateTimeZone>(_ =>
-            DateTimeZoneProviders.Tzdb.GetSystemDefault());
+        /// <summary>
+        /// Adds HumanCron services to the dependency injection container.
+        /// Automatically discovers and registers extension packages (Quartz.NET, Hangfire, etc.)
+        /// </summary>
+        /// <returns>The service collection for chaining</returns>
+        /// <remarks>
+        /// This method automatically detects installed HumanCron extension packages:
+        /// - Base: Registers Unix 5-part cron converter (industry standard)
+        /// - HumanCron.Quartz: Auto-registers Quartz.NET converter (if package installed)
+        ///
+        /// No additional configuration needed - just install the package and call AddHumanCron()
+        /// </remarks>
+        /// <example>
+        /// <code>
+        /// // Works with base package only OR with Quartz extension installed
+        /// using HumanCron;
+        ///
+        /// services.AddHumanCron();
+        ///
+        /// // Then inject and use:
+        /// public class MyService
+        /// {
+        ///     private readonly IHumanCronConverter _converter;
+        ///
+        ///     public MyService(IHumanCronConverter converter)
+        ///     {
+        ///         _converter = converter;
+        ///     }
+        ///
+        ///     public void ConvertSchedule()
+        ///     {
+        ///         // Natural language → Unix cron
+        ///         var result = _converter.ToCron("1d at 2pm");
+        ///         if (result is ParseResult&lt;string&gt;.Success success)
+        ///         {
+        ///             Console.WriteLine(success.Value); // "0 14 * * *"
+        ///         }
+        ///
+        ///         // Unix cron → Natural language
+        ///         var reverse = _converter.ToNaturalLanguage("0 14 * * *");
+        ///         if (reverse is ParseResult&lt;string&gt;.Success reverseSuccess)
+        ///         {
+        ///             Console.WriteLine(reverseSuccess.Value); // "1d at 2pm"
+        ///         }
+        ///     }
+        /// }
+        /// </code>
+        /// </example>
+        public IServiceCollection AddHumanCron()
+        {
+            // Register NodaTime dependencies if not already registered
+            // TryAddSingleton allows users to override with custom implementations
+            services.TryAddSingleton<IClock>(SystemClock.Instance);
+            services.TryAddSingleton<DateTimeZone>(_ =>
+                DateTimeZoneProviders.Tzdb.GetSystemDefault());
 
-        // Register core services (internal dependencies)
-        services.AddTransient<IScheduleParser, NaturalLanguageParser>();
-        services.AddTransient<IScheduleFormatter, NaturalLanguageFormatter>();
+            // Register core services (internal dependencies)
+            services.AddTransient<IScheduleParser, NaturalLanguageParser>();
+            services.AddTransient<IScheduleFormatter, NaturalLanguageFormatter>();
 
-        // Register Unix cron converter using factory method (handles IClock and DateTimeZone dependencies)
-        services.AddTransient<IHumanCronConverter>(_ => UnixCronConverter.Create());
+            // Register Unix cron converter using factory method (handles IClock and DateTimeZone dependencies)
+            services.AddTransient<IHumanCronConverter>(_ => UnixCronConverter.Create());
 
-        // Auto-discover and register extension services (Quartz, Hangfire, etc.)
-        RegisterExtensionServices(services);
+            // Auto-discover and register extension services (Quartz, Hangfire, etc.)
+            RegisterExtensionServices(services);
 
-        return services;
+            return services;
+        }
     }
+
+    // Cache for discovered extension registration methods to avoid repeated file I/O and reflection
+    private static readonly Lazy<Action<IServiceCollection>[]> ExtensionRegistrations =
+        new Lazy<Action<IServiceCollection>[]>(DiscoverExtensionRegistrations);
 
     /// <summary>
     /// Scans loaded assemblies for HumanCron extension packages and invokes their AddServices methods
@@ -94,65 +101,96 @@ public static class ServiceCollectionExtensions
     /// </summary>
     private static void RegisterExtensionServices(IServiceCollection services)
     {
-        // Force-load HumanCron.* extension assemblies from bin directory
-        // (Assemblies are loaded lazily by .NET, so they may not be in AppDomain yet)
-        var baseDirectory = AppDomain.CurrentDomain.BaseDirectory;
-        var extensionDlls = Directory.GetFiles(baseDirectory, "HumanCron.*.dll", SearchOption.TopDirectoryOnly);
-
-        // Cache loaded assemblies to avoid O(n×m) complexity
-        var loadedAssemblies = AppDomain.CurrentDomain.GetAssemblies()
-            .Select(a => a.FullName)
-            .ToHashSet();
-
-        foreach (var dllPath in extensionDlls)
+        // Use cached extension registrations (computed once on first call)
+        var registrations = ExtensionRegistrations.Value;
+        foreach (var registration in registrations)
         {
-            try
-            {
-                var assemblyName = AssemblyName.GetAssemblyName(dllPath);
-
-                // Skip if already loaded
-                if (loadedAssemblies.Contains(assemblyName.FullName))
-                    continue;
-
-                // Load assembly by name (let .NET resolve dependencies)
-                Assembly.Load(assemblyName);
-            }
-            catch (Exception ex)
-            {
-                // Ignore load failures (might be incompatible assemblies)
-                // Log for debugging purposes in development
-                Debug.WriteLine($"HumanCron: Failed to load assembly '{dllPath}': {ex.Message}");
-            }
+            registration(services);
         }
+    }
 
-        // Now scan loaded assemblies for extension services
-        var assemblies = AppDomain.CurrentDomain.GetAssemblies();
-
-        var filteredAssemblies = assemblies
-            .Where(assembly => assembly.GetName().Name?.StartsWith("HumanCron.") is true
-                            && assembly.GetName().Name != "HumanCron");
-
-        foreach (var assembly in filteredAssemblies)
+    /// <summary>
+    /// Discovers all extension registration methods by scanning HumanCron.* assemblies
+    /// This method is called once and cached for subsequent calls
+    /// </summary>
+    private static Action<IServiceCollection>[] DiscoverExtensionRegistrations()
+    {
+        try
         {
-            // Look for static classes (IsClass + IsAbstract + IsSealed)
-            var staticTypes = assembly.GetTypes()
-                .Where(t => t is { IsClass: true, IsAbstract: true, IsSealed: true });
+            // Force-load HumanCron.* extension assemblies from bin directory
+            // (Assemblies are loaded lazily by .NET, so they may not be in AppDomain yet)
+            var baseDirectory = AppDomain.CurrentDomain.BaseDirectory;
+            var extensionDlls = Directory.GetFiles(baseDirectory, "HumanCron.*.dll", SearchOption.TopDirectoryOnly);
 
-            foreach (var type in staticTypes)
+            // Cache loaded assemblies to avoid O(n×m) complexity
+            var loadedAssemblies = AppDomain.CurrentDomain.GetAssemblies()
+                .Select(a => a.FullName)
+                .ToHashSet();
+
+            foreach (var dllPath in extensionDlls)
             {
-                // Look for method signature: internal static IServiceCollection AddServices(IServiceCollection)
-                var method = type.GetMethod("AddServices",
-                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static,
-                    null,
-                    [typeof(IServiceCollection)],
-                    null);
-
-                if (method != null && method.ReturnType == typeof(IServiceCollection))
+                try
                 {
-                    // Invoke the extension's registration method
-                    method.Invoke(null, [services]);
+                    var assemblyName = AssemblyName.GetAssemblyName(dllPath);
+
+                    // Skip if already loaded
+                    if (loadedAssemblies.Contains(assemblyName.FullName))
+                        continue;
+
+                    // Load assembly by name (let .NET resolve dependencies)
+                    Assembly.Load(assemblyName);
+                }
+                catch (Exception ex)
+                {
+                    // Ignore load failures (might be incompatible assemblies)
+                    // Log for debugging purposes in development
+                    Debug.WriteLine($"HumanCron: Failed to load assembly '{dllPath}': {ex.Message}");
                 }
             }
+
+            // Now scan loaded assemblies for extension services
+            var assemblies = AppDomain.CurrentDomain.GetAssemblies();
+
+            var filteredAssemblies = assemblies
+                .Where(assembly => assembly.GetName().Name?.StartsWith("HumanCron.") is true
+                                && assembly.GetName().Name != "HumanCron");
+
+            var registrations = new System.Collections.Generic.List<Action<IServiceCollection>>();
+
+            foreach (var assembly in filteredAssemblies)
+            {
+                // Look for static classes (IsClass + IsAbstract + IsSealed)
+                var staticTypes = assembly.GetTypes()
+                    .Where(t => t is { IsClass: true, IsAbstract: true, IsSealed: true });
+
+                foreach (var type in staticTypes)
+                {
+                    // Look for method signature: internal static IServiceCollection AddServices(IServiceCollection)
+                    var method = type.GetMethod("AddServices",
+                        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static,
+                        null,
+                        [typeof(IServiceCollection)],
+                        null);
+
+                    if (method != null && method.ReturnType == typeof(IServiceCollection))
+                    {
+                        // Create a delegate to invoke this registration method
+                        var registration = (IServiceCollection services) =>
+                        {
+                            method.Invoke(null, [services]);
+                        };
+                        registrations.Add(registration);
+                    }
+                }
+            }
+
+            return [.. registrations];
+        }
+        catch (Exception ex)
+        {
+            // If discovery fails, log and return empty array (graceful degradation)
+            Debug.WriteLine($"HumanCron: Failed to discover extension services: {ex.Message}");
+            return [];
         }
     }
 }
