@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 120" width="320" height="120">
+  <!-- Background -->
+  <rect width="320" height="120" rx="20" fill="#ffffff"/>
+
+  <!-- H (Human) - left side in green -->
+  <text x="60" y="87" font-family="Arial, sans-serif" font-size="72" font-weight="bold" fill="#4CAF50" text-anchor="middle">H</text>
+
+  <!-- Top arrow: H → C -->
+  <g stroke="#666" stroke-width="7" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 100 30 L 220 30 M 210 22 L 220 30 L 210 38"/>
+  </g>
+
+  <!-- C (Cron) - right side in blue -->
+  <text x="260" y="87" font-family="Arial, sans-serif" font-size="72" font-weight="bold" fill="#2196F3" text-anchor="middle">C</text>
+
+  <!-- Bottom arrow: C → H -->
+  <g stroke="#666" stroke-width="7" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 220 90 L 100 90 M 110 82 L 100 90 L 110 98"/>
+  </g>
+</svg>
