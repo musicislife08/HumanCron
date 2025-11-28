@@ -18,74 +18,77 @@ namespace HumanCron;
 /// </summary>
 public static class ServiceCollectionExtensions
 {
-    /// <summary>
-    /// Adds HumanCron services to the dependency injection container.
-    /// Automatically discovers and registers extension packages (Quartz.NET, Hangfire, etc.)
-    /// </summary>
     /// <param name="services">The service collection to add services to</param>
-    /// <returns>The service collection for chaining</returns>
-    /// <remarks>
-    /// This method automatically detects installed HumanCron extension packages:
-    /// - Base: Registers Unix 5-part cron converter (industry standard)
-    /// - HumanCron.Quartz: Auto-registers Quartz.NET converter (if package installed)
-    ///
-    /// No additional configuration needed - just install the package and call AddHumanCron()
-    /// </remarks>
-    /// <example>
-    /// <code>
-    /// // Works with base package only OR with Quartz extension installed
-    /// using HumanCron;
-    ///
-    /// services.AddHumanCron();
-    ///
-    /// // Then inject and use:
-    /// public class MyService
-    /// {
-    ///     private readonly IHumanCronConverter _converter;
-    ///
-    ///     public MyService(IHumanCronConverter converter)
-    ///     {
-    ///         _converter = converter;
-    ///     }
-    ///
-    ///     public void ConvertSchedule()
-    ///     {
-    ///         // Natural language → Unix cron
-    ///         var result = _converter.ToCron("1d at 2pm");
-    ///         if (result is ParseResult&lt;string&gt;.Success success)
-    ///         {
-    ///             Console.WriteLine(success.Value); // "0 14 * * *"
-    ///         }
-    ///
-    ///         // Unix cron → Natural language
-    ///         var reverse = _converter.ToNaturalLanguage("0 14 * * *");
-    ///         if (reverse is ParseResult&lt;string&gt;.Success reverseSuccess)
-    ///         {
-    ///             Console.WriteLine(reverseSuccess.Value); // "1d at 2pm"
-    ///         }
-    ///     }
-    /// }
-    /// </code>
-    /// </example>
-    public static IServiceCollection AddHumanCron(this IServiceCollection services)
+    extension(IServiceCollection services)
     {
-        // Register NodaTime dependencies if not already registered
-        // TryAddSingleton allows users to override with custom implementations
-        services.TryAddSingleton<IClock>(SystemClock.Instance);
-        services.TryAddSingleton<DateTimeZone>(_ =>
-            DateTimeZoneProviders.Tzdb.GetSystemDefault());
+        /// <summary>
+        /// Adds HumanCron services to the dependency injection container.
+        /// Automatically discovers and registers extension packages (Quartz.NET, Hangfire, etc.)
+        /// </summary>
+        /// <returns>The service collection for chaining</returns>
+        /// <remarks>
+        /// This method automatically detects installed HumanCron extension packages:
+        /// - Base: Registers Unix 5-part cron converter (industry standard)
+        /// - HumanCron.Quartz: Auto-registers Quartz.NET converter (if package installed)
+        ///
+        /// No additional configuration needed - just install the package and call AddHumanCron()
+        /// </remarks>
+        /// <example>
+        /// <code>
+        /// // Works with base package only OR with Quartz extension installed
+        /// using HumanCron;
+        ///
+        /// services.AddHumanCron();
+        ///
+        /// // Then inject and use:
+        /// public class MyService
+        /// {
+        ///     private readonly IHumanCronConverter _converter;
+        ///
+        ///     public MyService(IHumanCronConverter converter)
+        ///     {
+        ///         _converter = converter;
+        ///     }
+        ///
+        ///     public void ConvertSchedule()
+        ///     {
+        ///         // Natural language → Unix cron
+        ///         var result = _converter.ToCron("1d at 2pm");
+        ///         if (result is ParseResult&lt;string&gt;.Success success)
+        ///         {
+        ///             Console.WriteLine(success.Value); // "0 14 * * *"
+        ///         }
+        ///
+        ///         // Unix cron → Natural language
+        ///         var reverse = _converter.ToNaturalLanguage("0 14 * * *");
+        ///         if (reverse is ParseResult&lt;string&gt;.Success reverseSuccess)
+        ///         {
+        ///             Console.WriteLine(reverseSuccess.Value); // "1d at 2pm"
+        ///         }
+        ///     }
+        /// }
+        /// </code>
+        /// </example>
+        public IServiceCollection AddHumanCron()
+        {
+            // Register NodaTime dependencies if not already registered
+            // TryAddSingleton allows users to override with custom implementations
+            services.TryAddSingleton<IClock>(SystemClock.Instance);
+            services.TryAddSingleton<DateTimeZone>(_ =>
+                DateTimeZoneProviders.Tzdb.GetSystemDefault());
 
-        // Register core services (internal dependencies)
-        services.AddTransient<IScheduleParser, NaturalLanguageParser>();
-        services.AddTransient<IScheduleFormatter, NaturalLanguageFormatter>();
+            // Register core services (internal dependencies)
+            services.AddTransient<IScheduleParser, NaturalLanguageParser>();
+            services.AddTransient<IScheduleFormatter, NaturalLanguageFormatter>();
 
-        // Register Unix cron converter using factory method (handles IClock and DateTimeZone dependencies)
-        services.AddTransient<IHumanCronConverter>(_ => UnixCronConverter.Create());
+            // Register Unix cron converter using factory method (handles IClock and DateTimeZone dependencies)
+            services.AddTransient<IHumanCronConverter>(_ => UnixCronConverter.Create());
 
-        // Auto-discover and register extension services (Quartz, Hangfire, etc.)
-        RegisterExtensionServices(services);
+            // Auto-discover and register extension services (Quartz, Hangfire, etc.)
+            RegisterExtensionServices(services);
 
-        return services;
+            return services;
+        }
     }
 
     /// <summary>

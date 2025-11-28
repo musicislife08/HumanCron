@@ -180,8 +180,38 @@ internal sealed record ScheduleSpec
     /// </summary>
     public int? NthOccurrence { get; init; }
 
-    // Range and list support for minute, hour, and day fields
+    // Range and list support for second, minute, hour, and day fields
     // Used for cron expressions like "0-30 9-17 1-15 * *" (ranges) and "0,15,30,45 9,12,15 1,15,30 * *" (lists)
+
+    /// <summary>
+    /// Second value (0-59) - null if not specified
+    /// NCrontab: "30 * * * * *" → Second = 30 (at 30 seconds past each minute)
+    /// </summary>
+    public int? Second { get; init; }
+
+    /// <summary>
+    /// Second range start (0-59) - null if not specified
+    /// NCrontab: "0-30 * * * * *" → SecondStart = 0, SecondEnd = 30
+    /// </summary>
+    public int? SecondStart { get; init; }
+
+    /// <summary>
+    /// Second range end (0-59) - null if not specified
+    /// NCrontab: "0-30 * * * * *" → SecondStart = 0, SecondEnd = 30
+    /// </summary>
+    public int? SecondEnd { get; init; }
+
+    /// <summary>
+    /// Second range step (1-59) - null if not specified
+    /// NCrontab: "0-30/5 * * * * *" → SecondStart = 0, SecondEnd = 30, SecondStep = 5
+    /// </summary>
+    public int? SecondStep { get; init; }
+
+    /// <summary>
+    /// Second list (0-59) - null if not specified
+    /// NCrontab: "0,15,30,45 * * * * *" → SecondList = [0, 15, 30, 45]
+    /// </summary>
+    public IReadOnlyList<int>? SecondList { get; init; }
 
     /// <summary>
     /// Minute range start (0-59) - null if not specified

@@ -2,7 +2,7 @@
 
 ## Overview
 
-HumanCron is a natural language schedule parser with Quartz.NET integration. It converts human-readable schedule descriptions like "every 2 weeks on sunday at 2pm" into Quartz triggers.
+HumanCron is a natural language schedule parser with multiple scheduler integrations. It converts human-readable schedule descriptions like "every 30 seconds", "every day at 2pm", or "every 2 weeks on sunday at 2pm" into cron expressions for **Unix cron** (5-field), **NCrontab** (6-field), **Hangfire**, and **Quartz.NET**.
 
 ## Features
 
@@ -11,11 +11,16 @@ HumanCron is a natural language schedule parser with Quartz.NET integration. It 
 ✅ **Day-of-Week**: "every monday", "every sunday at 2pm"
 ✅ **Day Patterns**: "every weekday", "every weekend"
 ✅ **Day-of-Month**: "every month on 15" (with monthly/yearly intervals)
-✅ **Combined Month + Day**: "on january 1st", "on december 25th" (NEW in v0.3.0 - more natural syntax)
+✅ **Combined Month + Day**: "on january 1st", "on december 25th"
 ✅ **Multi-Week with Day-of-Week**: "every 2 weeks on sunday" (calculates aligned start time)
 ✅ **Monthly with Day-of-Month**: "every 3 months on 15 at 2pm"
 ✅ **Timezone Support**: All schedules respect timezone configuration
-✅ **Quartz.NET Integration**: Converts to CronSchedule or CalendarIntervalSchedule
+✅ **Multiple Output Formats**:
+  - Unix cron (5-field)
+  - NCrontab (6-field with seconds)
+  - Quartz.NET (CronSchedule or CalendarIntervalSchedule)
+  - Hangfire (RecurringJob with natural language or fluent API)
+✅ **Bidirectional Conversion**: Convert cron expressions back to natural language
 ✅ **Start Time Calculation**: Automatically aligns multi-interval schedules with constraints
 
 ## Installation
@@ -26,8 +31,14 @@ HumanCron is a natural language schedule parser with Quartz.NET integration. It 
 # Core library (Unix cron support)
 dotnet add package HumanCron
 
+# NCrontab 6-field cron support (optional - adds seconds precision)
+dotnet add package HumanCron.NCrontab
+
 # Quartz.NET integration (optional)
 dotnet add package HumanCron.Quartz
+
+# Hangfire integration (optional - includes NCrontab support)
+dotnet add package HumanCron.Hangfire
 ```
 
 ### 2. Register Services
@@ -36,16 +47,124 @@ dotnet add package HumanCron.Quartz
 using HumanCron;
 
 // In Program.cs or Startup.cs
-services.AddHumanCron(); // Auto-discovers Quartz extension if installed
+services.AddHumanCron(); // Auto-discovers all installed extensions (NCrontab, Quartz, Hangfire)
 ```
 
 This registers:
-- `IScheduleParser` → Parses natural language to ScheduleSpec
-- `IQuartzScheduleBuilder` → Converts ScheduleSpec to Quartz schedules
+- `IHumanCronConverter` → Unix cron converter (core)
+- `INCrontabConverter` → NCrontab converter (if HumanCron.NCrontab installed)
+- `IQuartzScheduleConverter` → Quartz.NET converter (if HumanCron.Quartz installed)
+- Hangfire extension methods (if HumanCron.Hangfire installed)
 
 ## Basic Usage
 
-### Dependency Injection
+### Unix Cron (Core Package)
+
+```csharp
+using HumanCron.Converters.Unix;
+
+public class UnixCronExample
+{
+    private readonly IHumanCronConverter _converter;
+
+    public UnixCronExample(IHumanCronConverter converter)
+    {
+        _converter = converter;
+    }
+
+    public string ConvertToCron(string naturalLanguage)
+    {
+        var result = _converter.ToUnixCron(naturalLanguage);
+
+        return result switch
+        {
+            ParseResult<string>.Success success => success.Value,
+            ParseResult<string>.Error error => throw new ArgumentException(error.Message),
+            _ => throw new InvalidOperationException("Unexpected result type")
+        };
+    }
+}
+
+// Example: "every 30 minutes" → "*/30 * * * *"
+```
+
+### NCrontab (6-Field Cron with Seconds)
+
+```csharp
+using HumanCron.NCrontab;
+
+public class NCrontabExample
+{
+    private readonly INCrontabConverter _converter;
+
+    public NCrontabExample(INCrontabConverter converter)
+    {
+        _converter = converter;
+    }
+
+    public string ConvertToNCrontab(string naturalLanguage)
+    {
+        var result = _converter.ToNCrontab(naturalLanguage);
+
+        return result switch
+        {
+            ParseResult<string>.Success success => success.Value,
+            ParseResult<string>.Error error => throw new ArgumentException(error.Message),
+            _ => throw new InvalidOperationException("Unexpected result type")
+        };
+    }
+}
+
+// Examples:
+// "every 30 seconds"    → "*/30 * * * * *"
+// "every 15 minutes"    → "0 */15 * * * *"
+// "every weekday at 9am" → "0 0 9 * * 1-5"
+```
+
+### Hangfire Integration
+
+```csharp
+using Hangfire;
+using HumanCron.Hangfire.Extensions;
+using HumanCron.Builders;
+
+public class HangfireExample
+{
+    // Option 1: Natural language strings
+    public void ScheduleWithString()
+    {
+        RecurringJob.AddOrUpdate(
+            "job-id",
+            "every 30 seconds",
+            () => DoWork()
+        );
+    }
+
+    // Option 2: Fluent API
+    public void ScheduleWithFluentAPI()
+    {
+        Schedule.Every(30).Seconds()
+            .AddOrUpdateHangfireJob("job-id", () => DoWork());
+
+        Schedule.Every(1).Day()
+            .At(new TimeOnly(9, 0))
+            .OnWeekdays()
+            .AddOrUpdateHangfireJob("weekday-job", () => WeekdayTask());
+    }
+
+    // Option 3: Convert to NCrontab expression
+    public void GetNCrontabExpression()
+    {
+        var cronExpression = Schedule.Every(15).Minutes().ToNCrontabExpression();
+        // Returns: "0 */15 * * * *"
+    }
+
+    private void DoWork() { }
+    private void WeekdayTask() { }
+}
+```
+
+### Quartz.NET Integration
 
 ```csharp
 using HumanCron.Abstractions;
@@ -54,12 +173,12 @@ using HumanCron.Parsing;
 using HumanCron.Quartz;
 using Quartz;
 
-public class MyBackgroundService
+public class QuartzExample
 {
     private readonly IScheduleParser _parser;
     private readonly IQuartzScheduleBuilder _quartzBuilder;
 
-    public MyBackgroundService(
+    public QuartzExample(
         IScheduleParser parser,
         IQuartzScheduleBuilder quartzBuilder)
     {

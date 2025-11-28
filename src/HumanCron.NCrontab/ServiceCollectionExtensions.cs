@@ -1,10 +1,11 @@
 using Microsoft.Extensions.DependencyInjection;
-using HumanCron.Quartz.Abstractions;
+using HumanCron.NCrontab.Abstractions;
+using HumanCron.NCrontab.Converters;
 
-namespace HumanCron.Quartz;
+namespace HumanCron.NCrontab;
 
 /// <summary>
-/// Dependency injection registration for HumanCron.Quartz extension
+/// Dependency injection registration for HumanCron.NCrontab extension
 /// </summary>
 /// <remarks>
 /// DO NOT call AddServices() directly - it is automatically invoked by HumanCron.AddHumanCron()
@@ -17,14 +18,14 @@ public static class ServiceCollectionExtensions
     {
         /// <summary>
         /// Internal registration method invoked by HumanCron.AddHumanCron() assembly scanning
-        /// Registers Quartz.NET converter services
+        /// Registers NCrontab 6-field converter services
         /// </summary>
         /// <returns>The service collection for chaining</returns>
         internal IServiceCollection AddServices()
         {
-            // Register Quartz schedule converter using factory method
+            // Register NCrontab converter using factory method
             // Using Transient lifetime - creates new instance per injection
-            services.AddTransient<IQuartzScheduleConverter>(_ => QuartzScheduleConverterFactory.Create());
+            services.AddTransient<INCrontabConverter>(_ => NCrontabConverter.Create());
 
             return services;
         }
