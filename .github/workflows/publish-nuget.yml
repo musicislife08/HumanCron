@@ -49,6 +49,12 @@ jobs:
     - name: Pack HumanCron.Quartz
       run: dotnet pack src/HumanCron.Quartz/HumanCron.Quartz.csproj --no-build --configuration Release --output ./nupkgs
 
+    - name: Pack HumanCron.NCrontab
+      run: dotnet pack src/HumanCron.NCrontab/HumanCron.NCrontab.csproj --no-build --configuration Release --output ./nupkgs
+
+    - name: Pack HumanCron.Hangfire
+      run: dotnet pack src/HumanCron.Hangfire/HumanCron.Hangfire.csproj --no-build --configuration Release --output ./nupkgs
+
     - name: Push to NuGet.org
       env:
         NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
