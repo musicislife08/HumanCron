@@ -91,71 +91,106 @@ public static class ServiceCollectionExtensions
         }
     }
 
+    // Cache for discovered extension registration methods to avoid repeated file I/O and reflection
+    private static readonly Lazy<Action<IServiceCollection>[]> ExtensionRegistrations =
+        new Lazy<Action<IServiceCollection>[]>(DiscoverExtensionRegistrations);
+
     /// <summary>
     /// Scans loaded assemblies for HumanCron extension packages and invokes their AddServices methods
     /// Each extension package can control its own service lifetimes and registration logic
     /// </summary>
     private static void RegisterExtensionServices(IServiceCollection services)
     {
-        // Force-load HumanCron.* extension assemblies from bin directory
-        // (Assemblies are loaded lazily by .NET, so they may not be in AppDomain yet)
-        var baseDirectory = AppDomain.CurrentDomain.BaseDirectory;
-        var extensionDlls = Directory.GetFiles(baseDirectory, "HumanCron.*.dll", SearchOption.TopDirectoryOnly);
-
-        // Cache loaded assemblies to avoid O(n×m) complexity
-        var loadedAssemblies = AppDomain.CurrentDomain.GetAssemblies()
-            .Select(a => a.FullName)
-            .ToHashSet();
-
-        foreach (var dllPath in extensionDlls)
+        // Use cached extension registrations (computed once on first call)
+        var registrations = ExtensionRegistrations.Value;
+        foreach (var registration in registrations)
         {
-            try
-            {
-                var assemblyName = AssemblyName.GetAssemblyName(dllPath);
-
-                // Skip if already loaded
-                if (loadedAssemblies.Contains(assemblyName.FullName))
-                    continue;
-
-                // Load assembly by name (let .NET resolve dependencies)
-                Assembly.Load(assemblyName);
-            }
-            catch (Exception ex)
-            {
-                // Ignore load failures (might be incompatible assemblies)
-                // Log for debugging purposes in development
-                Debug.WriteLine($"HumanCron: Failed to load assembly '{dllPath}': {ex.Message}");
-            }
+            registration(services);
         }
+    }
 
-        // Now scan loaded assemblies for extension services
-        var assemblies = AppDomain.CurrentDomain.GetAssemblies();
-
-        var filteredAssemblies = assemblies
-            .Where(assembly => assembly.GetName().Name?.StartsWith("HumanCron.") is true
-                            && assembly.GetName().Name != "HumanCron");
-
-        foreach (var assembly in filteredAssemblies)
+    /// <summary>
+    /// Discovers all extension registration methods by scanning HumanCron.* assemblies
+    /// This method is called once and cached for subsequent calls
+    /// </summary>
+    private static Action<IServiceCollection>[] DiscoverExtensionRegistrations()
+    {
+        try
         {
-            // Look for static classes (IsClass + IsAbstract + IsSealed)
-            var staticTypes = assembly.GetTypes()
-                .Where(t => t is { IsClass: true, IsAbstract: true, IsSealed: true });
+            // Force-load HumanCron.* extension assemblies from bin directory
+            // (Assemblies are loaded lazily by .NET, so they may not be in AppDomain yet)
+            var baseDirectory = AppDomain.CurrentDomain.BaseDirectory;
+            var extensionDlls = Directory.GetFiles(baseDirectory, "HumanCron.*.dll", SearchOption.TopDirectoryOnly);
 
-            foreach (var type in staticTypes)
+            // Cache loaded assemblies to avoid O(n×m) complexity
+            var loadedAssemblies = AppDomain.CurrentDomain.GetAssemblies()
+                .Select(a => a.FullName)
+                .ToHashSet();
+
+            foreach (var dllPath in extensionDlls)
             {
-                // Look for method signature: internal static IServiceCollection AddServices(IServiceCollection)
-                var method = type.GetMethod("AddServices",
-                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static,
-                    null,
-                    [typeof(IServiceCollection)],
-                    null);
-
-                if (method != null && method.ReturnType == typeof(IServiceCollection))
+                try
                 {
-                    // Invoke the extension's registration method
-                    method.Invoke(null, [services]);
+                    var assemblyName = AssemblyName.GetAssemblyName(dllPath);
+
+                    // Skip if already loaded
+                    if (loadedAssemblies.Contains(assemblyName.FullName))
+                        continue;
+
+                    // Load assembly by name (let .NET resolve dependencies)
+                    Assembly.Load(assemblyName);
+                }
+                catch (Exception ex)
+                {
+                    // Ignore load failures (might be incompatible assemblies)
+                    // Log for debugging purposes in development
+                    Debug.WriteLine($"HumanCron: Failed to load assembly '{dllPath}': {ex.Message}");
                 }
             }
+
+            // Now scan loaded assemblies for extension services
+            var assemblies = AppDomain.CurrentDomain.GetAssemblies();
+
+            var filteredAssemblies = assemblies
+                .Where(assembly => assembly.GetName().Name?.StartsWith("HumanCron.") is true
+                                && assembly.GetName().Name != "HumanCron");
+
+            var registrations = new System.Collections.Generic.List<Action<IServiceCollection>>();
+
+            foreach (var assembly in filteredAssemblies)
+            {
+                // Look for static classes (IsClass + IsAbstract + IsSealed)
+                var staticTypes = assembly.GetTypes()
+                    .Where(t => t is { IsClass: true, IsAbstract: true, IsSealed: true });
+
+                foreach (var type in staticTypes)
+                {
+                    // Look for method signature: internal static IServiceCollection AddServices(IServiceCollection)
+                    var method = type.GetMethod("AddServices",
+                        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static,
+                        null,
+                        [typeof(IServiceCollection)],
+                        null);
+
+                    if (method != null && method.ReturnType == typeof(IServiceCollection))
+                    {
+                        // Create a delegate to invoke this registration method
+                        var registration = (IServiceCollection services) =>
+                        {
+                            method.Invoke(null, [services]);
+                        };
+                        registrations.Add(registration);
+                    }
+                }
+            }
+
+            return [.. registrations];
+        }
+        catch (Exception ex)
+        {
+            // If discovery fails, log and return empty array (graceful degradation)
+            Debug.WriteLine($"HumanCron: Failed to discover extension services: {ex.Message}");
+            return [];
         }
     }
 }

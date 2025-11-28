@@ -16,6 +16,10 @@ namespace HumanCron.Hangfire.Extensions;
 /// </summary>
 public static class ScheduleBuilderExtensions
 {
+    // Cache system default timezone to avoid repeated lookups
+    private static readonly DateTimeZone SystemDefaultTimezone =
+        DateTimeZoneProviders.Tzdb.GetSystemDefault();
+
     /// <param name="builder">The ScheduleBuilder instance</param>
     extension(ScheduleBuilder builder)
     {
@@ -126,7 +130,7 @@ public static class ScheduleBuilderExtensions
             var spec = GetScheduleSpec(builder);
             var ncrontabBuilder = new NCrontab.Converters.NCrontabBuilder(
                 NodaTime.SystemClock.Instance,
-                NodaTime.DateTimeZoneProviders.Tzdb.GetSystemDefault()
+                SystemDefaultTimezone  // Use cached timezone
             );
             var result = ncrontabBuilder.Build(spec);
 

@@ -22,6 +22,9 @@ namespace HumanCron.NCrontab.Converters;
 /// </remarks>
 public sealed class NCrontabConverter : INCrontabConverter
 {
+    // Maximum input length to prevent DoS attacks via extremely long strings
+    private const int MaxInputLength = 1000;
+
     private readonly IScheduleParser _parser;
     private readonly IScheduleFormatter _formatter;
     private readonly NCrontabBuilder _cronBuilder;
@@ -71,6 +74,12 @@ public sealed class NCrontabConverter : INCrontabConverter
             return new ParseResult<string>.Error("Natural language input cannot be empty");
         }
 
+        if (naturalLanguage.Length > MaxInputLength)
+        {
+            return new ParseResult<string>.Error(
+                $"Natural language input exceeds maximum length of {MaxInputLength} characters");
+        }
+
         var options = new ScheduleParserOptions
         {
             TimeZone = userTimezone ?? _localTimeZone
@@ -101,6 +110,12 @@ public sealed class NCrontabConverter : INCrontabConverter
         if (string.IsNullOrWhiteSpace(ncrontabExpression))
         {
             return new ParseResult<string>.Error("NCrontab expression cannot be empty");
+        }
+
+        if (ncrontabExpression.Length > MaxInputLength)
+        {
+            return new ParseResult<string>.Error(
+                $"NCrontab expression exceeds maximum length of {MaxInputLength} characters");
         }
 
         // Step 1: Parse NCrontab cron → ScheduleSpec

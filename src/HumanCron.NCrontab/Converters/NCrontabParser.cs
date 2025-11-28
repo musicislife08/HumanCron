@@ -38,6 +38,13 @@ internal sealed class NCrontabParser
             var month = parts[4];
             var dayOfWeek = parts[5];
 
+            // Validate field ranges before parsing
+            var validationError = ValidateFields(second, minute, hour, day, month, dayOfWeek);
+            if (validationError != null)
+            {
+                return new ParseResult<ScheduleSpec>.Error(validationError);
+            }
+
             // Determine interval unit and value based on pattern
             var (interval, unit) = DetermineInterval(second, minute, hour, day, dayOfWeek);
             if (interval == 0)
@@ -445,5 +452,115 @@ internal sealed class NCrontabParser
         }
 
         return values.Count > 0 ? values : null;
+    }
+
+    /// <summary>
+    /// Validate all fields are within valid NCrontab ranges
+    /// </summary>
+    private static string? ValidateFields(string second, string minute, string hour, string day, string month, string dayOfWeek)
+    {
+        // Validate second field (0-59)
+        var secondError = ValidateField(second, 0, 59, "Second");
+        if (secondError != null) return secondError;
+
+        // Validate minute field (0-59)
+        var minuteError = ValidateField(minute, 0, 59, "Minute");
+        if (minuteError != null) return minuteError;
+
+        // Validate hour field (0-23)
+        var hourError = ValidateField(hour, 0, 23, "Hour");
+        if (hourError != null) return hourError;
+
+        // Validate day field (1-31)
+        var dayError = ValidateField(day, 1, 31, "Day");
+        if (dayError != null) return dayError;
+
+        // Validate month field (1-12)
+        var monthError = ValidateField(month, 1, 12, "Month");
+        if (monthError != null) return monthError;
+
+        // Validate day-of-week field (0-7, both 0 and 7 = Sunday)
+        var dayOfWeekError = ValidateField(dayOfWeek, 0, 7, "Day-of-week");
+        if (dayOfWeekError != null) return dayOfWeekError;
+
+        return null;
+    }
+
+    /// <summary>
+    /// Validate a single cron field against min/max range
+    /// Handles wildcards (*), ranges (1-5), lists (1,2,3), and steps (*/5)
+    /// </summary>
+    private static string? ValidateField(string field, int min, int max, string fieldName)
+    {
+        // Wildcard is always valid
+        if (field == "*") return null;
+
+        // Handle step values: */N or N-M/S
+        var stepParts = field.Split('/');
+        var valueToValidate = stepParts[0];
+
+        // Validate step value if present
+        if (stepParts.Length == 2)
+        {
+            if (!int.TryParse(stepParts[1], out var step) || step < 1)
+            {
+                return $"{fieldName} step value must be >= 1, got '{stepParts[1]}'";
+            }
+        }
+
+        // If base is wildcard, step is already validated
+        if (valueToValidate == "*") return null;
+
+        // Handle ranges: N-M
+        if (valueToValidate.Contains('-'))
+        {
+            var rangeParts = valueToValidate.Split('-');
+            if (rangeParts.Length != 2)
+            {
+                return $"{fieldName} range must be in format 'N-M', got '{valueToValidate}'";
+            }
+
+            if (!int.TryParse(rangeParts[0], out var rangeStart) || rangeStart < min || rangeStart > max)
+            {
+                return $"{fieldName} range start must be {min}-{max}, got '{rangeParts[0]}'";
+            }
+
+            if (!int.TryParse(rangeParts[1], out var rangeEnd) || rangeEnd < min || rangeEnd > max)
+            {
+                return $"{fieldName} range end must be {min}-{max}, got '{rangeParts[1]}'";
+            }
+
+            // Allow wraparound ranges (e.g., 22-6 for 10pm to 6am)
+            // Both values are valid, wraparound is OK
+
+            return null;
+        }
+
+        // Handle lists: N,M,O
+        if (valueToValidate.Contains(','))
+        {
+            var listParts = valueToValidate.Split(',');
+            foreach (var part in listParts)
+            {
+                if (!int.TryParse(part.Trim(), out var value) || value < min || value > max)
+                {
+                    return $"{fieldName} list value must be {min}-{max}, got '{part}'";
+                }
+            }
+            return null;
+        }
+
+        // Handle single numeric value
+        if (int.TryParse(valueToValidate, out var numValue))
+        {
+            if (numValue < min || numValue > max)
+            {
+                return $"{fieldName} must be {min}-{max}, got {numValue}";
+            }
+            return null;
+        }
+
+        // If we get here, it's an invalid format
+        return $"{fieldName} has invalid format: '{field}'";
     }
 }

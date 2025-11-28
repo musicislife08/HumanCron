@@ -231,6 +231,206 @@ public class NCrontabConverterTests
 
     #endregion
 
+    #region Edge Cases - Malformed Expressions
+
+    [TestCase("* * * * *")]  // Wrong field count (5 instead of 6)
+    [TestCase("* * * * * * *")]  // Wrong field count (7 instead of 6)
+    [TestCase("")]  // Empty string
+    [TestCase("     ")]  // Whitespace only
+    [TestCase("abc def ghi jkl mno pqr")]  // Garbage input (non-numeric values)
+    [TestCase("@#$% * * * * *")]  // Special characters in seconds
+    [TestCase("* @#$% * * * *")]  // Special characters in minutes
+    public void ToNaturalLanguage_MalformedExpression_ReturnsError(string malformedCron)
+    {
+        // Act
+        var result = _converter.ToNaturalLanguage(malformedCron);
+
+        // Assert - Should return error for all malformed inputs
+        Assert.That(result, Is.TypeOf<ParseResult<string>.Error>(),
+            $"Should return error for malformed expression: '{malformedCron}'");
+    }
+
+    [TestCase("100 * * * * *", "Second")]  // Second out of range (0-59)
+    [TestCase("* 100 * * * *", "Minute")]  // Minute out of range (0-59)
+    [TestCase("* * 25 * * *", "Hour")]  // Hour out of range (0-23)
+    [TestCase("* * * 32 * *", "Day")]  // Day out of range (1-31)
+    [TestCase("* * * * 13 *", "Month")]  // Month out of range (1-12)
+    [TestCase("* * * * * 8", "Day-of-week")]  // Day-of-week out of range (0-7)
+    [TestCase("* * * 0 * *", "Day")]  // Day 0 invalid (days are 1-31)
+    [TestCase("* * * * 0 *", "Month")]  // Month 0 invalid (months are 1-12)
+    public void ToNaturalLanguage_InvalidValues_ReturnsError(string cronExpression, string expectedFieldName)
+    {
+        // Act - Parser now validates ranges strictly
+        var result = _converter.ToNaturalLanguage(cronExpression);
+
+        // Assert - Should return error for invalid ranges
+        Assert.That(result, Is.TypeOf<ParseResult<string>.Error>(),
+            $"Should return error for invalid value in: '{cronExpression}'");
+        var error = (ParseResult<string>.Error)result;
+        Assert.That(error.Message, Does.Contain(expectedFieldName),
+            $"Error message should mention the invalid field: {expectedFieldName}");
+    }
+
+    #endregion
+
+    #region Edge Cases - Boundary Values
+
+    [TestCase("59 * * * * *", "every day")]  // Second boundary (complex pattern)
+    [TestCase("0 59 * * * *", "every day")]  // Minute boundary (complex pattern)
+    [TestCase("0 0 23 * * *", "every day at 11pm")]  // Hour boundary (max)
+    [TestCase("0 0 0 31 * *", "every day on the 31st at 12am")]  // Day boundary (max)
+    [TestCase("0 0 0 1 12 *", "every day on the 1st at 12am in december")]  // Month boundary (max)
+    [TestCase("0 0 0 * * 0", "every sunday at 12am")]  // Day-of-week boundary (0 = Sunday)
+    [TestCase("0 0 0 * * 7", "every sunday at 12am")]  // Day-of-week boundary (7 = Sunday)
+    [TestCase("0 0 0 * * 6", "every saturday at 12am")]  // Day-of-week boundary (max valid)
+    public void ToNaturalLanguage_BoundaryValues_HandlesCorrectly(string cronExpression, string expectedNatural)
+    {
+        // Act
+        var result = _converter.ToNaturalLanguage(cronExpression);
+
+        // Assert - Should handle all boundary values correctly
+        Assert.That(result, Is.TypeOf<ParseResult<string>.Success>(),
+            $"Should successfully parse boundary value: '{cronExpression}'");
+        var success = (ParseResult<string>.Success)result;
+        Assert.That(success.Value, Is.EqualTo(expectedNatural),
+            $"Incorrect natural language for boundary value: '{cronExpression}'");
+    }
+
+    [Test]
+    public void ToNCrontab_LargestValidInterval_Seconds()
+    {
+        // Act - Every 59 seconds (largest valid interval)
+        var result = _converter.ToNCrontab("every 59 seconds");
+
+        // Assert
+        Assert.That(result, Is.TypeOf<ParseResult<string>.Success>());
+        var success = (ParseResult<string>.Success)result;
+        Assert.That(success.Value, Is.EqualTo("*/59 * * * * *"));
+    }
+
+    [Test]
+    public void ToNCrontab_LargestValidInterval_Minutes()
+    {
+        // Act - Every 59 minutes (largest valid interval)
+        var result = _converter.ToNCrontab("every 59 minutes");
+
+        // Assert
+        Assert.That(result, Is.TypeOf<ParseResult<string>.Success>());
+        var success = (ParseResult<string>.Success)result;
+        Assert.That(success.Value, Is.EqualTo("0 */59 * * * *"));
+    }
+
+    [Test]
+    public void ToNCrontab_LargestValidInterval_Hours()
+    {
+        // Act - Every 23 hours (largest valid interval)
+        var result = _converter.ToNCrontab("every 23 hours");
+
+        // Assert
+        Assert.That(result, Is.TypeOf<ParseResult<string>.Success>());
+        var success = (ParseResult<string>.Success)result;
+        Assert.That(success.Value, Is.EqualTo("0 0 */23 * * *"));
+    }
+
+    #endregion
+
+    #region Edge Cases - Range and List Combinations
+
+    [TestCase("0-59 * * * * *", "every day")]  // Full second range - complex pattern defaults to daily
+    [TestCase("0 0-59 * * * *", "every day between minutes 0 and 59")]  // Full minute range
+    [TestCase("0 0 0-23 * * *", "every day between hours 12am and 11pm")]  // Full hour range
+    [TestCase("0 0 0 * * 0-6", "every sunday-saturday at 12am")]  // Full day-of-week range
+    [TestCase("0 0 9 * * 1,2,3,4,5", "every monday,tuesday,wednesday,thursday,friday at 9am")]  // All weekdays as list
+    [TestCase("0,30 * * * * *", "every day")]  // Multiple seconds (complex pattern defaults to daily)
+    [TestCase("0 0,30 * * * *", "every day at minutes 0,30")]  // Multiple minutes
+    public void ToNaturalLanguage_RangeAndListCombinations_ParsesCorrectly(string cronExpression, string expectedNatural)
+    {
+        // Act
+        var result = _converter.ToNaturalLanguage(cronExpression);
+
+        // Assert
+        Assert.That(result, Is.TypeOf<ParseResult<string>.Success>(),
+            $"Should successfully parse range/list: '{cronExpression}'");
+        var success = (ParseResult<string>.Success)result;
+        Assert.That(success.Value, Is.EqualTo(expectedNatural),
+            $"Incorrect natural language for range/list: '{cronExpression}'");
+    }
+
+    #endregion
+
+    #region Edge Cases - DST Transitions
+
+    [Test]
+    public void ToNCrontab_DSTSpringForward_HandlesCorrectly()
+    {
+        // Arrange - US Pacific timezone springs forward at 2am on March 9, 2025 (2am becomes 3am)
+        var pacificTimezone = DateTimeZoneProviders.Tzdb["America/Los_Angeles"];
+
+        // Create a clock at a time BEFORE the spring forward transition
+        var beforeDST = Instant.FromUtc(2025, 3, 9, 9, 0);  // 1am Pacific (before DST)
+        var clockBeforeDST = new FakeClock(beforeDST);
+        var converterBeforeDST = new NCrontabConverter(
+            new NaturalLanguageParser(),
+            new NaturalLanguageFormatter(),
+            clockBeforeDST,
+            DateTimeZone.Utc);
+
+        // Act - Schedule daily job at 2:30am Pacific (time that doesn't exist on DST day)
+        var result = converterBeforeDST.ToNCrontab("every day at 2:30am", pacificTimezone);
+
+        // Assert - Should convert to UTC correctly
+        Assert.That(result, Is.TypeOf<ParseResult<string>.Success>());
+        var success = (ParseResult<string>.Success)result;
+        // 2:30am PST = 10:30 UTC (before DST)
+        // 2:30am PDT would be 9:30 UTC (during DST, but 2:30am doesn't exist on transition day)
+        Assert.That(success.Value, Is.EqualTo("0 30 10 * * *"),
+            "Should convert 2:30am Pacific to UTC based on current offset");
+    }
+
+    [Test]
+    public void ToNCrontab_DSTFallBack_HandlesCorrectly()
+    {
+        // Arrange - US Pacific timezone falls back at 2am on November 2, 2025 (2am happens twice)
+        var pacificTimezone = DateTimeZoneProviders.Tzdb["America/Los_Angeles"];
+
+        // Create a clock at a time BEFORE the fall back transition
+        var beforeDST = Instant.FromUtc(2025, 11, 2, 8, 0);  // 1am Pacific (before fallback)
+        var clockBeforeDST = new FakeClock(beforeDST);
+        var converterBeforeDST = new NCrontabConverter(
+            new NaturalLanguageParser(),
+            new NaturalLanguageFormatter(),
+            clockBeforeDST,
+            DateTimeZone.Utc);
+
+        // Act - Schedule daily job at 1:30am Pacific (time that occurs twice on DST day)
+        var result = converterBeforeDST.ToNCrontab("every day at 1:30am", pacificTimezone);
+
+        // Assert - Should convert to UTC correctly
+        Assert.That(result, Is.TypeOf<ParseResult<string>.Success>());
+        var success = (ParseResult<string>.Success)result;
+        // 1:30am PDT = 8:30 UTC (before fallback)
+        Assert.That(success.Value, Is.EqualTo("0 30 8 * * *"),
+            "Should convert 1:30am Pacific to UTC based on current offset");
+    }
+
+    [Test]
+    public void ToNCrontab_CrossingMidnight_DifferentTimezones()
+    {
+        // Arrange - Tokyo is UTC+9
+        var tokyoTimezone = DateTimeZoneProviders.Tzdb["Asia/Tokyo"];
+
+        // Act - "every day at 2am Tokyo time"
+        var result = _converter.ToNCrontab("every day at 2am", tokyoTimezone);
+
+        // Assert - 2am Tokyo = 17:00 previous day UTC
+        Assert.That(result, Is.TypeOf<ParseResult<string>.Success>());
+        var success = (ParseResult<string>.Success)result;
+        Assert.That(success.Value, Is.EqualTo("0 0 17 * * *"),
+            "2am Tokyo should convert to 17:00 UTC (previous day)");
+    }
+
+    #endregion
+
     #region Bidirectional Conversion
 
     [TestCase("every 30 seconds")]
