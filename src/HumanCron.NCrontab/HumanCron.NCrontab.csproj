@@ -20,7 +20,7 @@
 
   <ItemGroup>
     <!-- Reference core HumanCron library -->
-    <PackageReference Include="NodaTime" Version="3.2.2" />
+    <PackageReference Include="NodaTime" Version="3.2.3" />
 
     <!-- HumanCron dependency with EXACT version match for synchronized releases -->
     <!-- Use ProjectReference for local development, PackageReference with exact version for NuGet -->
@@ -32,7 +32,7 @@
     <PackageReference Include="Cronos" Version="0.11.1" />
 
     <!-- DI abstractions for extension registration -->
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.1" />
   </ItemGroup>
 
 </Project>
