@@ -2,6 +2,7 @@ using HumanCron.Models;
 using HumanCron.Models.Internal;
 using HumanCron.Abstractions;
 using HumanCron.Quartz.Abstractions;
+using HumanCron.Quartz.Helpers;
 using Quartz;
 using System;
 using NodaTime;
@@ -40,9 +41,11 @@ public sealed class QuartzScheduleConverter : IQuartzScheduleConverter
         _quartzParser = new QuartzScheduleParser();
     }
 
-    public ParseResult<IScheduleBuilder> ToQuartzSchedule(string naturalLanguage)
+    public ParseResult<IScheduleBuilder> ToQuartzSchedule(
+        string naturalLanguage,
+        int misfireInstruction = 0)
     {
-        return ToQuartzSchedule(naturalLanguage, null);
+        return ToQuartzSchedule(naturalLanguage, null, misfireInstruction);
     }
 
     /// <summary>
@@ -54,6 +57,9 @@ public sealed class QuartzScheduleConverter : IQuartzScheduleConverter
     /// Quartz stores timezone metadata, so DST changes are handled automatically
     /// Use IANA timezone IDs (e.g., DateTimeZoneProviders.Tzdb["America/New_York"])
     /// </param>
+    /// <param name="misfireInstruction">
+    /// Quartz misfire instruction constant (default: 0 = SmartPolicy)
+    /// </param>
     /// <returns>ParseResult containing Quartz IScheduleBuilder or error</returns>
     /// <remarks>
     /// Unlike Unix cron, Quartz schedules preserve timezone information via .InTimeZone().
@@ -63,7 +69,10 @@ public sealed class QuartzScheduleConverter : IQuartzScheduleConverter
     /// - Default: ToQuartzSchedule("1d at 2pm") → 2pm in system timezone
     /// - Explicit: ToQuartzSchedule("1d at 2pm", EST) → 2pm EST (handles DST automatically)
     /// </remarks>
-    internal ParseResult<IScheduleBuilder> ToQuartzSchedule(string naturalLanguage, DateTimeZone? userTimezone)
+    internal ParseResult<IScheduleBuilder> ToQuartzSchedule(
+        string naturalLanguage,
+        DateTimeZone? userTimezone,
+        int misfireInstruction = 0)
     {
         if (string.IsNullOrWhiteSpace(naturalLanguage))
         {
@@ -96,6 +105,10 @@ public sealed class QuartzScheduleConverter : IQuartzScheduleConverter
         try
         {
             var scheduleBuilder = _quartzBuilder.Build(spec);
+
+            // Step 3: Apply misfire instruction to the schedule builder
+            scheduleBuilder = MisfireInstructionHelper.ApplyMisfireInstruction(scheduleBuilder, misfireInstruction);
+
             return new ParseResult<IScheduleBuilder>.Success(scheduleBuilder);
         }
         catch (Exception ex)
@@ -155,21 +168,13 @@ public sealed class QuartzScheduleConverter : IQuartzScheduleConverter
         return new ParseResult<DateTimeOffset?>.Success(startTime);
     }
 
-    public ParseResult<TriggerBuilder> CreateTriggerBuilder(string naturalLanguage)
+    public ParseResult<TriggerBuilder> CreateTriggerBuilder(
+        string naturalLanguage,
+        int misfireInstruction = 0)
     {
-        if (string.IsNullOrWhiteSpace(naturalLanguage))
-        {
-            return new ParseResult<TriggerBuilder>.Error("Natural language input cannot be empty");
-        }
-
-        if (naturalLanguage.Length > MaxInputLength)
-        {
-            return new ParseResult<TriggerBuilder>.Error(
-                $"Natural language input exceeds maximum length of {MaxInputLength} characters");
-        }
-
-        // Get the schedule builder
-        var scheduleResult = ToQuartzSchedule(naturalLanguage);
+        // Get the schedule builder with misfire instruction applied
+        // (ToQuartzSchedule validates input - null/empty/length checks)
+        var scheduleResult = ToQuartzSchedule(naturalLanguage, misfireInstruction);
         if (scheduleResult is not ParseResult<IScheduleBuilder>.Success scheduleSuccess)
         {
             var error = (ParseResult<IScheduleBuilder>.Error)scheduleResult;

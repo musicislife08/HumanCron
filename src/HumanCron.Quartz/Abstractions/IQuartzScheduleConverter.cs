@@ -23,10 +23,19 @@ public interface IQuartzScheduleConverter
     /// Returns CronScheduleBuilder for simple patterns, CalendarIntervalScheduleBuilder for complex patterns
     /// </summary>
     /// <param name="naturalLanguage">Natural language schedule (e.g., "2w on sunday at 3am")</param>
+    /// <param name="misfireInstruction">
+    /// Quartz misfire instruction constant (default: 0 = SmartPolicy).
+    /// Use constants from Quartz.MisfireInstruction.CronTrigger or Quartz.MisfireInstruction.CalendarIntervalTrigger
+    /// </param>
     /// <returns>ParseResult with IScheduleBuilder (CronScheduleBuilder or CalendarIntervalScheduleBuilder)</returns>
     /// <example>
     /// <code>
+    /// // Use default misfire handling (SmartPolicy)
     /// var result = converter.ToQuartzSchedule("1d at 2pm");
+    ///
+    /// // Skip missed executions using Quartz constant
+    /// var result = converter.ToQuartzSchedule("1d at 2pm", Quartz.MisfireInstruction.CronTrigger.DoNothing);
+    ///
     /// if (result is ParseResult&lt;IScheduleBuilder&gt;.Success success)
     /// {
     ///     var trigger = TriggerBuilder.Create()
@@ -35,7 +44,9 @@ public interface IQuartzScheduleConverter
     /// }
     /// </code>
     /// </example>
-    ParseResult<IScheduleBuilder> ToQuartzSchedule(string naturalLanguage);
+    ParseResult<IScheduleBuilder> ToQuartzSchedule(
+        string naturalLanguage,
+        int misfireInstruction = 0);
 
     /// <summary>
     /// Convert Quartz schedule builder back to natural language
@@ -56,14 +67,32 @@ public interface IQuartzScheduleConverter
     ParseResult<string> ToNaturalLanguage(IScheduleBuilder? scheduleBuilder);
 
     /// <summary>
-    /// Create a pre-configured TriggerBuilder with schedule and start time already set
+    /// Create a pre-configured TriggerBuilder with schedule, start time, and misfire handling already set
     /// Convenience method that handles start time calculation for CalendarInterval schedules automatically
     /// </summary>
     /// <param name="naturalLanguage">Natural language schedule (e.g., "3w on sunday at 2pm")</param>
+    /// <param name="misfireInstruction">
+    /// Quartz misfire instruction constant (default: 0 = SmartPolicy).
+    /// Use constants from Quartz.MisfireInstruction.CronTrigger or Quartz.MisfireInstruction.CalendarIntervalTrigger
+    /// </param>
     /// <returns>ParseResult with TriggerBuilder ready for job-specific configuration</returns>
     /// <example>
     /// <code>
+    /// // Use default misfire handling (SmartPolicy)
     /// var result = converter.CreateTriggerBuilder("3w on sunday at 2pm");
+    ///
+    /// // Skip missed executions using Quartz constant
+    /// var result = converter.CreateTriggerBuilder(
+    ///     "every day at 2pm",
+    ///     Quartz.MisfireInstruction.CronTrigger.DoNothing
+    /// );
+    ///
+    /// // Fire all missed runs using Quartz constant
+    /// var result = converter.CreateTriggerBuilder(
+    ///     "every hour",
+    ///     Quartz.MisfireInstruction.IgnoreMisfirePolicy
+    /// );
+    ///
     /// if (result is ParseResult&lt;TriggerBuilder&gt;.Success success)
     /// {
     ///     var trigger = success.Value
@@ -73,5 +102,7 @@ public interface IQuartzScheduleConverter
     /// }
     /// </code>
     /// </example>
-    ParseResult<TriggerBuilder> CreateTriggerBuilder(string naturalLanguage);
+    ParseResult<TriggerBuilder> CreateTriggerBuilder(
+        string naturalLanguage,
+        int misfireInstruction = 0);
 }
