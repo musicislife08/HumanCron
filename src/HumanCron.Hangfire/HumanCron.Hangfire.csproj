@@ -22,12 +22,12 @@
     <!-- Reference HumanCron.NCrontab for NCrontab conversion -->
     <ProjectReference Include="..\HumanCron.NCrontab\HumanCron.NCrontab.csproj" PrivateAssets="All" />
     <!-- Package references for consumers -->
-    <PackageReference Include="HumanCron" Version="[$(Version)]" />
-    <PackageReference Include="HumanCron.NCrontab" Version="[$(Version)]" />
+    <PackageReference Include="HumanCron" VersionOverride="[$(Version)]" />
+    <PackageReference Include="HumanCron.NCrontab" VersionOverride="[$(Version)]" />
     <!-- Hangfire core library -->
-    <PackageReference Include="Hangfire.Core" Version="1.8.22" />
-    <!-- Override vulnerable Newtonsoft.Json transitive dependency from Hangfire -->
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+    <PackageReference Include="Hangfire.Core" />
+    <!-- Hangfire.Core still depends on Newtonsoft.Json >= 11.0.1 which has GHSA-5crp-9r3c-p9vr; pin to 13.0.4+ until Hangfire bumps their minimum -->
+    <PackageReference Include="Newtonsoft.Json" />
   </ItemGroup>
 
 </Project>
