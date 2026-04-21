@@ -478,40 +478,16 @@ public static class ServiceCollectionExtensions
 
 ---
 
-## NuGet Dependencies
+## Package Management
 
-> Versions are managed centrally via `Directory.Packages.props` (Central Package Management); per-project `<PackageReference>` entries omit `Version=`.
+This project uses **Central Package Management (CPM)**. All NuGet package versions are declared once in `Directory.Packages.props` at the repository root; individual `.csproj` files reference packages without `Version=` attributes.
 
-### HumanCron.csproj (Core)
+**Why:**
+- Single source of truth for versions across core, extensions, and tests
+- Synchronized version bumps via single-file edits
+- Prevents the class of bugs where two projects pull mismatched versions of the same transitive dependency
 
-```xml
-<ItemGroup>
-  <!-- DI abstractions (no concrete implementation) -->
-  <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
-</ItemGroup>
-```
-
-### HumanCron.Quartz.csproj (Extension)
-
-```xml
-<ItemGroup>
-  <!-- Reference core library -->
-  <ProjectReference Include="..\HumanCron\HumanCron.csproj" />
-
-  <!-- Quartz.NET dependency -->
-  <PackageReference Include="Quartz" />
-</ItemGroup>
-```
-
-### HumanCron.Tests.csproj
-
-```xml
-<ItemGroup>
-  <PackageReference Include="NUnit" />
-  <PackageReference Include="NUnit3TestAdapter" />
-  <PackageReference Include="Microsoft.NET.Test.Sdk" />
-</ItemGroup>
-```
+For the current dependency set of any project, see its `.csproj` file directly.
 
 ---
 
