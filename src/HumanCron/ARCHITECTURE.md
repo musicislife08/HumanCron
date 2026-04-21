@@ -480,12 +480,14 @@ public static class ServiceCollectionExtensions
 
 ## NuGet Dependencies
 
+> Versions are managed centrally via `Directory.Packages.props` (Central Package Management); per-project `<PackageReference>` entries omit `Version=`.
+
 ### HumanCron.csproj (Core)
 
 ```xml
 <ItemGroup>
   <!-- DI abstractions (no concrete implementation) -->
-  <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.0" />
+  <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
 </ItemGroup>
 ```
 
@@ -497,7 +499,7 @@ public static class ServiceCollectionExtensions
   <ProjectReference Include="..\HumanCron\HumanCron.csproj" />
 
   <!-- Quartz.NET dependency -->
-  <PackageReference Include="Quartz" Version="3.15.1" />
+  <PackageReference Include="Quartz" />
 </ItemGroup>
 ```
 
@@ -505,10 +507,9 @@ public static class ServiceCollectionExtensions
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="NUnit" Version="4.3.1" />
-  <PackageReference Include="NUnit3TestAdapter" Version="4.6.0" />
-  <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.13.0" />
-  <PackageReference Include="FluentAssertions" Version="7.0.0" />
+  <PackageReference Include="NUnit" />
+  <PackageReference Include="NUnit3TestAdapter" />
+  <PackageReference Include="Microsoft.NET.Test.Sdk" />
 </ItemGroup>
 ```
 
