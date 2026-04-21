@@ -478,42 +478,16 @@ public static class ServiceCollectionExtensions
 
 ---
 
-## NuGet Dependencies
+## Package Management
 
-### HumanCron.csproj (Core)
+This project uses **Central Package Management (CPM)**. All NuGet package versions are declared once in `Directory.Packages.props` at the repository root; individual `.csproj` files reference packages without `Version=` attributes.
 
-```xml
-<ItemGroup>
-  <!-- DI abstractions (no concrete implementation) -->
-  <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.0" />
+**Why:**
+- Single source of truth for versions across core, extensions, and tests
+- Synchronized version bumps via single-file edits
+- Prevents the class of bugs where two projects pull mismatched versions of the same transitive dependency
 
-  <!-- Cron validation and next-run calculation -->
-  <PackageReference Include="Cronos" Version="0.8.4" />
-</ItemGroup>
-```
-
-### HumanCron.Quartz.csproj (Extension)
-
-```xml
-<ItemGroup>
-  <!-- Reference core library -->
-  <ProjectReference Include="..\HumanCron\HumanCron.csproj" />
-
-  <!-- Quartz.NET dependency -->
-  <PackageReference Include="Quartz" Version="3.15.1" />
-</ItemGroup>
-```
-
-### HumanCron.Tests.csproj
-
-```xml
-<ItemGroup>
-  <PackageReference Include="NUnit" Version="4.3.1" />
-  <PackageReference Include="NUnit3TestAdapter" Version="4.6.0" />
-  <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.13.0" />
-  <PackageReference Include="FluentAssertions" Version="7.0.0" />
-</ItemGroup>
-```
+For the current dependency set of any project, see its `.csproj` file directly.
 
 ---
 
@@ -677,8 +651,6 @@ Used by both UnixCronBuilder and QuartzCronBuilder for DRY formatting.
 
 ## Related Documentation
 
-- [Original Research Document](/tmp/natural-language-scheduling-research.md)
-- [Cronos Library](https://www.nuget.org/packages/Cronos)
 - [Quartz.NET Documentation](https://www.quartz-scheduler.net/)
 
 ---

@@ -28,9 +28,6 @@
     <PackageReference Include="HumanCron" VersionOverride="[$(Version)]" />
     <!-- Brackets [x.y.z] mean "exactly this version only" in NuGet version ranges -->
 
-    <!-- Cronos for NCrontab parsing (6-field support) -->
-    <PackageReference Include="Cronos" />
-
     <!-- DI abstractions for extension registration -->
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
   </ItemGroup>
