@@ -486,9 +486,6 @@ public static class ServiceCollectionExtensions
 <ItemGroup>
   <!-- DI abstractions (no concrete implementation) -->
   <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.0" />
-
-  <!-- Cron validation and next-run calculation -->
-  <PackageReference Include="Cronos" Version="0.8.4" />
 </ItemGroup>
 ```
 
@@ -677,8 +674,6 @@ Used by both UnixCronBuilder and QuartzCronBuilder for DRY formatting.
 
 ## Related Documentation
 
-- [Original Research Document](/tmp/natural-language-scheduling-research.md)
-- [Cronos Library](https://www.nuget.org/packages/Cronos)
 - [Quartz.NET Documentation](https://www.quartz-scheduler.net/)
 
 ---
