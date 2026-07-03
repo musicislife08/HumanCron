@@ -29,15 +29,24 @@ string FormatDuration(TimeSpan duration);
 - Compound durations, both directions, required (not optional): `"1 day 2 hours 30 minutes"`
   / `"1d 2h 30m"`. The formatter decomposes into largest whole units descending
   (`TimeSpan.FromMinutes(150)` → `"2 hours 30 minutes"`), and the parser accepts everything
-  the formatter emits, or the round-trip contract breaks. Seconds are included only when
-  nonzero; sub-second precision is ignored entirely (not rounded, just dropped). **Zero
-  edge case:** if decomposition leaves no whole-unit components — the duration is exactly
-  zero, or it's entirely sub-second (e.g. `500ms`) — format as `"0 seconds"` rather than an
-  empty string, so `FormatDuration` never returns `""`.
-- Unit tokens: full words (`second(s)`, `minute(s)`, `hour(s)`, `day(s)`, `week(s)`,
-  `month(s)`, `year(s)`) and single-letter abbreviations, reusing the mapping already
-  reserved (but unused) by the internal `IntervalUnit` enum: `s`, `m` (minutes), `h`, `d`,
-  `w`, `M` (months, capitalized to disambiguate from minutes), `y`.
+  the formatter emits, or the round-trip contract breaks. Each unit is included only when
+  nonzero (`"1 minute"`, never `"1 minute 0 seconds"`); precision finer than a millisecond is
+  ignored entirely (not rounded, just dropped). **Zero edge case:** if decomposition leaves no
+  whole-unit components at all — the duration is exactly zero, or it's entirely
+  sub-millisecond — `FormatDuration` returns `""` rather than inventing a placeholder unit
+  (no `"0 seconds"`/`"0 milliseconds"`; a human describing a zero or negligible duration just
+  says nothing). To keep `Parse(Format(x)) == x` true for this case, `ParseDuration("")` is a
+  deliberate, sole exception to the rest of the library's "empty input is an error"
+  convention: it returns `Success(TimeSpan.Zero)`, not `Error`.
+- Unit tokens: full words (`millisecond(s)`, `second(s)`, `minute(s)`, `hour(s)`, `day(s)`,
+  `week(s)`, `month(s)`, `year(s)`) and abbreviations, reusing the mapping already reserved
+  (but unused) by the internal `IntervalUnit` enum: `s`, `m` (minutes), `h`, `d`, `w`, `M`
+  (months, capitalized to disambiguate from minutes), `y` — plus `ms` for milliseconds, a
+  unit the schedule grammar has no equivalent for (sub-second precision is meaningless for a
+  *recurring* schedule but meaningful for a one-shot elapsed duration, so this is an
+  intentional divergence, not an oversight). Because `ms` shares a prefix with `m` (minutes),
+  the tokenizer matches `ms` before falling back to single-letter units (longest-match-first),
+  so `"500ms"` isn't misread as `"500m"` plus a stray `s`.
 - Compound spacing: **spaced only** — `"1d 2h 30m"`. No squashed form (`"1d2h30m"`) — the
   library favors readability over density, and there's no existing squashed-form precedent
   elsewhere in the grammar to match.
@@ -147,8 +156,8 @@ Layer 3 is an addition to the existing `HumanCron.Quartz`.
 ## Internal implementation notes
 
 - No new internal model type is needed for "parsed duration" — NodaTime's own `Period` type
-  already has the Years/Months/Weeks/Days/Hours/Minutes/Seconds fields required, so the
-  internal parser produces a `Period` directly.
+  already has the Years/Months/Weeks/Days/Hours/Minutes/Seconds/Milliseconds fields required,
+  so the internal parser produces a `Period` directly.
 - A new internal `DurationParser`/`DurationFormatter` pair mirrors the existing
   `NaturalLanguageParser`/`NaturalLanguageFormatter` split. `FormatDuration(TimeSpan)` (Layer
   1) is a thin wrapper: convert the `TimeSpan` to a fixed-units-only `Period`, then call the
@@ -162,7 +171,10 @@ Layer 3 is an addition to the existing `HumanCron.Quartz`.
 
 ## Error handling
 
-- Empty/whitespace input → `Error`.
+- Empty or whitespace-only input to `ParseDuration` → `Success(TimeSpan.Zero)` (trimmed
+  first, so `""` and `"   "` behave identically). This is the one deliberate exception to the
+  rest of the library's "empty input is an error" convention, kept solely to preserve
+  `Parse(Format(x)) == x` for the zero-duration case (see Layer 1 above).
 - Unparseable tokens / unknown units → `Error` with a message naming the offending input.
 - `ParseDuration` given month/year units → `Error`, pointing the caller at `ToFutureTime`/
   `ToNaturalDuration` for calendar-aware math.
@@ -171,7 +183,10 @@ Layer 3 is an addition to the existing `HumanCron.Quartz`.
 ## Testing
 
 - Round-trip tests (`Parse(Format(x)) == x`) for `TimeSpan`, in the spirit of the existing
-  `CompleteBidirectionalTests` — including negative values.
+  `CompleteBidirectionalTests` — including negative values and millisecond-precision values.
+- The zero-duration exception explicitly: `FormatDuration(TimeSpan.Zero) == ""` and
+  `ParseDuration("") == Success(TimeSpan.Zero)`, plus the sub-millisecond-truncates-to-zero
+  case (e.g. a duration built from ticks alone).
 - `FakeClock`-pinned tests for the now-based sugar (`anchor: null`).
 - A month-end rollover test (`Jan 31` + 1 month across both leap and non-leap Februaries).
 - An explicit DST-transition test pair proving the Mode 1 vs. Mode 2 distinction: the same
