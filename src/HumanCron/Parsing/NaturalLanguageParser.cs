@@ -1,6 +1,7 @@
 using HumanCron.Models.Internal;
 using HumanCron.Abstractions;
 using HumanCron.Models;
+using HumanCron.Validation;
 
 namespace HumanCron.Parsing;
 
@@ -34,7 +35,10 @@ internal sealed partial class NaturalLanguageParser : IScheduleParser
         var rangeStepMatch = RangeStepPattern().Match(input);
         if (rangeStepMatch.Success)
         {
-            return ParseRangeStepPattern(rangeStepMatch, input, options);
+            var rangeStepResult = ParseRangeStepPattern(rangeStepMatch, input, options);
+            return rangeStepResult is ParseResult<ScheduleSpec>.Success rangeStepSuccess
+                ? ApplyMinIntervalFloor(rangeStepSuccess.Value, naturalLanguage, options)
+                : rangeStepResult;
         }
 
         // Check for specific day patterns first (e.g., "every monday", "every weekday")
@@ -125,7 +129,7 @@ internal sealed partial class NaturalLanguageParser : IScheduleParser
                 "Cannot specify both a specific day and a day pattern (internal parsing error)");
         }
 
-        return new ParseResult<ScheduleSpec>.Success(new ScheduleSpec
+        var spec = new ScheduleSpec
         {
             Interval = interval,
             Unit = unit,
@@ -153,6 +157,30 @@ internal sealed partial class NaturalLanguageParser : IScheduleParser
             DayStart = dayStart,
             DayEnd = dayEnd,
             Year = year
-        });
+        };
+
+        return ApplyMinIntervalFloor(spec, naturalLanguage, options);
+    }
+
+    /// <summary>
+    /// Enforces ScheduleParserOptions.MinInterval (if set) against a fully-built spec, right
+    /// before it would otherwise be returned as a Success. Shared by both Parse's normal tail
+    /// and the range+step early-return path, since both produce a final ScheduleSpec that needs
+    /// the same floor check.
+    /// </summary>
+    private static ParseResult<ScheduleSpec> ApplyMinIntervalFloor(
+        ScheduleSpec spec, string naturalLanguage, ScheduleParserOptions options)
+    {
+        if (options.MinInterval is { } minInterval)
+        {
+            var tightestGap = TightestGapCalculator.Calculate(spec);
+            if (tightestGap < minInterval)
+            {
+                return new ParseResult<ScheduleSpec>.Error(
+                    $"'{naturalLanguage}' runs more often than the minimum allowed interval of {FormatFloor(minInterval)}");
+            }
+        }
+
+        return new ParseResult<ScheduleSpec>.Success(spec);
     }
 }

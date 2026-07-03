@@ -63,12 +63,20 @@ public sealed class NCrontabConverter : INCrontabConverter
     /// <inheritdoc/>
     public ParseResult<string> ToNCrontab(string naturalLanguage)
     {
-        return ToNCrontab(naturalLanguage, null);
+        return ToNCrontab(naturalLanguage, (DateTimeZone?)null);
     }
 
     /// <inheritdoc/>
     public ParseResult<string> ToNCrontab(string naturalLanguage, DateTimeZone? userTimezone)
     {
+        return ToNCrontab(naturalLanguage, new ScheduleParserOptions { TimeZone = userTimezone ?? _localTimeZone });
+    }
+
+    /// <inheritdoc/>
+    public ParseResult<string> ToNCrontab(string naturalLanguage, ScheduleParserOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+
         if (string.IsNullOrWhiteSpace(naturalLanguage))
         {
             return new ParseResult<string>.Error("Natural language input cannot be empty");
@@ -79,11 +87,6 @@ public sealed class NCrontabConverter : INCrontabConverter
             return new ParseResult<string>.Error(
                 $"Natural language input exceeds maximum length of {MaxInputLength} characters");
         }
-
-        var options = new ScheduleParserOptions
-        {
-            TimeZone = userTimezone ?? _localTimeZone
-        };
 
         // Step 1: Parse natural language → ScheduleSpec
         var parseResult = _parser.Parse(naturalLanguage, options);

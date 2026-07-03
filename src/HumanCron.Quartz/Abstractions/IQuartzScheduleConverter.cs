@@ -1,4 +1,5 @@
 using HumanCron.Models;
+using HumanCron.Parsing;
 using Quartz;
 
 namespace HumanCron.Quartz.Abstractions;
@@ -46,6 +47,37 @@ public interface IQuartzScheduleConverter
     /// </example>
     ParseResult<IScheduleBuilder> ToQuartzSchedule(
         string naturalLanguage,
+        int misfireInstruction = 0);
+
+    /// <summary>
+    /// Convert natural language to Quartz schedule builder, with full parser options
+    /// (timezone and/or a MinInterval floor)
+    /// </summary>
+    /// <param name="naturalLanguage">Natural language schedule (e.g., "2w on sunday at 3am")</param>
+    /// <param name="options">
+    /// Parser options. Unlike the misfire-only overload, options.TimeZone is used exactly
+    /// as given (default = system timezone) - there is no per-converter local-timezone
+    /// fallback once you pass this object yourself, matching System.Text.Json's
+    /// JsonSerializerOptions.
+    /// </param>
+    /// <param name="misfireInstruction">Quartz misfire instruction constant (default: 0 = SmartPolicy)</param>
+    /// <returns>ParseResult with IScheduleBuilder, or an Error if MinInterval is set and violated</returns>
+    /// <example>
+    /// <code>
+    /// var options = new ScheduleParserOptions { MinInterval = TimeSpan.FromMinutes(15) };
+    /// var result = converter.ToQuartzSchedule("every 5 minutes", options); // Error: runs more often than 15 minutes
+    ///
+    /// if (result is ParseResult&lt;IScheduleBuilder&gt;.Success success)
+    /// {
+    ///     var trigger = TriggerBuilder.Create()
+    ///         .WithSchedule(success.Value)
+    ///         .Build();
+    /// }
+    /// </code>
+    /// </example>
+    ParseResult<IScheduleBuilder> ToQuartzSchedule(
+        string naturalLanguage,
+        ScheduleParserOptions options,
         int misfireInstruction = 0);
 
     /// <summary>
@@ -104,5 +136,37 @@ public interface IQuartzScheduleConverter
     /// </example>
     ParseResult<TriggerBuilder> CreateTriggerBuilder(
         string naturalLanguage,
+        int misfireInstruction = 0);
+
+    /// <summary>
+    /// Create a pre-configured TriggerBuilder, with full parser options
+    /// (timezone and/or a MinInterval floor)
+    /// </summary>
+    /// <param name="naturalLanguage">Natural language schedule (e.g., "3w on sunday at 2pm")</param>
+    /// <param name="options">
+    /// Parser options. Unlike the misfire-only overload, options.TimeZone is used exactly
+    /// as given (default = system timezone) - there is no per-converter local-timezone
+    /// fallback once you pass this object yourself, matching System.Text.Json's
+    /// JsonSerializerOptions.
+    /// </param>
+    /// <param name="misfireInstruction">Quartz misfire instruction constant (default: 0 = SmartPolicy)</param>
+    /// <returns>ParseResult with TriggerBuilder, or an Error if MinInterval is set and violated</returns>
+    /// <example>
+    /// <code>
+    /// var options = new ScheduleParserOptions { MinInterval = TimeSpan.FromMinutes(15) };
+    /// var result = converter.CreateTriggerBuilder("every day at 2pm", options);
+    ///
+    /// if (result is ParseResult&lt;TriggerBuilder&gt;.Success success)
+    /// {
+    ///     var trigger = success.Value
+    ///         .WithIdentity("myTrigger", "myGroup")
+    ///         .ForJob("myJob", "myJobGroup")
+    ///         .Build();
+    /// }
+    /// </code>
+    /// </example>
+    ParseResult<TriggerBuilder> CreateTriggerBuilder(
+        string naturalLanguage,
+        ScheduleParserOptions options,
         int misfireInstruction = 0);
 }

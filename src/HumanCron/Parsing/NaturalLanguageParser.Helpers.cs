@@ -125,4 +125,32 @@ internal sealed partial class NaturalLanguageParser
         return isAm ? hour : hour + 12;
     }
 
+    /// <summary>
+    /// Format a TimeSpan floor value for the MinInterval violation error message, in the
+    /// largest whole unit that evenly divides it (e.g. 15 minutes, 2 hours, 1 day).
+    /// Not a general-purpose duration formatter - scoped to this one error message.
+    /// </summary>
+    private static string FormatFloor(TimeSpan floor)
+    {
+        if (floor.Ticks % TimeSpan.TicksPerDay == 0 && floor.Ticks / TimeSpan.TicksPerDay >= 1)
+        {
+            var days = floor.Ticks / TimeSpan.TicksPerDay;
+            return days == 1 ? "1 day" : $"{days} days";
+        }
+
+        if (floor.Ticks % TimeSpan.TicksPerHour == 0 && floor.Ticks / TimeSpan.TicksPerHour >= 1)
+        {
+            var hours = floor.Ticks / TimeSpan.TicksPerHour;
+            return hours == 1 ? "1 hour" : $"{hours} hours";
+        }
+
+        if (floor.Ticks % TimeSpan.TicksPerMinute == 0 && floor.Ticks / TimeSpan.TicksPerMinute >= 1)
+        {
+            var minutes = floor.Ticks / TimeSpan.TicksPerMinute;
+            return minutes == 1 ? "1 minute" : $"{minutes} minutes";
+        }
+
+        var seconds = (long)floor.TotalSeconds;
+        return seconds == 1 ? "1 second" : $"{seconds} seconds";
+    }
 }

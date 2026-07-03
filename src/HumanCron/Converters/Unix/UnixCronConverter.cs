@@ -65,7 +65,7 @@ public sealed class UnixCronConverter : IHumanCronConverter
     /// <inheritdoc/>
     public ParseResult<string> ToCron(string naturalLanguage)
     {
-        return ToCron(naturalLanguage, null);
+        return ToCron(naturalLanguage, (DateTimeZone?)null);
     }
 
     /// <summary>
@@ -92,6 +92,14 @@ public sealed class UnixCronConverter : IHumanCronConverter
     /// </remarks>
     public ParseResult<string> ToCron(string naturalLanguage, DateTimeZone? userTimezone)
     {
+        return ToCron(naturalLanguage, new ScheduleParserOptions { TimeZone = userTimezone ?? _localTimeZone });
+    }
+
+    /// <inheritdoc/>
+    public ParseResult<string> ToCron(string naturalLanguage, ScheduleParserOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+
         if (string.IsNullOrWhiteSpace(naturalLanguage))
         {
             return new ParseResult<string>.Error("Natural language input cannot be empty");
@@ -102,12 +110,6 @@ public sealed class UnixCronConverter : IHumanCronConverter
             return new ParseResult<string>.Error(
                 $"Natural language input exceeds maximum length of {MaxInputLength} characters");
         }
-
-        // Use provided timezone or default to server's local timezone
-        var options = new ScheduleParserOptions
-        {
-            TimeZone = userTimezone ?? _localTimeZone
-        };
 
         // Step 1: Parse natural language → ScheduleSpec
         var parseResult = _parser.Parse(naturalLanguage, options);
