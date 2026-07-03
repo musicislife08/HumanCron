@@ -3,6 +3,7 @@ using HumanCron.Parsing;
 using HumanCron.Quartz;
 using HumanCron.Quartz.Abstractions;
 using HumanCron.Quartz.Converters;
+using NodaTime;
 using Quartz;
 
 namespace HumanCron.Tests.Converters;
@@ -443,4 +444,80 @@ public class QuartzScheduleConverterTests
         Assert.Throws<ArgumentNullException>(() =>
             _converter.CreateTriggerBuilder("every day at 2pm", null!));
     }
+
+    #region CreateOneTimeTriggerBuilder() - One-Time Duration-Based Trigger
+
+    [Test]
+    public void CreateOneTimeTriggerBuilder_ExplicitAnchor_SetsCorrectStartTime()
+    {
+        var anchor = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+
+        var result = _converter.CreateOneTimeTriggerBuilder("2 hours", anchor);
+
+        Assert.That(result, Is.TypeOf<ParseResult<TriggerBuilder>.Success>());
+        var success = (ParseResult<TriggerBuilder>.Success)result;
+        var trigger = success.Value.WithIdentity("test").Build();
+
+        Assert.That(trigger, Is.InstanceOf<ISimpleTrigger>());
+        Assert.That(trigger.StartTimeUtc, Is.EqualTo(anchor.AddHours(2).ToUniversalTime()));
+    }
+
+    [Test]
+    public void CreateOneTimeTriggerBuilder_FiresExactlyOnce()
+    {
+        var anchor = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+
+        var result = _converter.CreateOneTimeTriggerBuilder("2 hours", anchor);
+
+        Assert.That(result, Is.TypeOf<ParseResult<TriggerBuilder>.Success>());
+        var success = (ParseResult<TriggerBuilder>.Success)result;
+        var trigger = success.Value.WithIdentity("test").Build();
+
+        var firstFire = trigger.GetFireTimeAfter(anchor.ToUniversalTime().AddSeconds(-1));
+        Assert.That(firstFire, Is.EqualTo(anchor.AddHours(2).ToUniversalTime()));
+
+        var secondFire = trigger.GetFireTimeAfter(firstFire);
+        Assert.That(secondFire, Is.Null);
+    }
+
+    [Test]
+    public void CreateOneTimeTriggerBuilder_WithTimeZone_UsesPreciseMode()
+    {
+        var newYork = DateTimeZoneProviders.Tzdb["America/New_York"];
+        var anchor = new DateTimeOffset(2026, 3, 8, 1, 30, 0, TimeSpan.FromHours(-5));
+
+        var result = _converter.CreateOneTimeTriggerBuilder("1 month", anchor, newYork);
+
+        Assert.That(result, Is.TypeOf<ParseResult<TriggerBuilder>.Success>());
+        var success = (ParseResult<TriggerBuilder>.Success)result;
+        var trigger = success.Value.WithIdentity("test").Build();
+
+        var expected = new DateTimeOffset(2026, 4, 8, 1, 30, 0, TimeSpan.FromHours(-4));
+        Assert.That(trigger.StartTimeUtc, Is.EqualTo(expected.ToUniversalTime()));
+    }
+
+    [Test]
+    public void CreateOneTimeTriggerBuilder_MisfireInstruction_AppliesToTrigger()
+    {
+        var anchor = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+
+        var result = _converter.CreateOneTimeTriggerBuilder(
+            "2 hours", anchor, misfireInstruction: MisfireInstruction.IgnoreMisfirePolicy);
+
+        Assert.That(result, Is.TypeOf<ParseResult<TriggerBuilder>.Success>());
+        var success = (ParseResult<TriggerBuilder>.Success)result;
+        var trigger = (ISimpleTrigger)success.Value.WithIdentity("test").Build();
+
+        Assert.That(trigger.MisfireInstruction, Is.EqualTo(MisfireInstruction.IgnoreMisfirePolicy));
+    }
+
+    [Test]
+    public void CreateOneTimeTriggerBuilder_InvalidDuration_ReturnsError()
+    {
+        var result = _converter.CreateOneTimeTriggerBuilder("not a duration");
+
+        Assert.That(result, Is.TypeOf<ParseResult<TriggerBuilder>.Error>());
+    }
+
+    #endregion
 }
