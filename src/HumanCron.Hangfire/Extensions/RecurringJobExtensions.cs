@@ -111,7 +111,8 @@ public static class RecurringJobExtensions
             ParseResult<string>.Success success => success.Value,
             ParseResult<string>.Error error => throw new ArgumentException(
                 $"Failed to parse natural language schedule: {error.Message}",
-                nameof(naturalLanguageSchedule)),
+                nameof(naturalLanguageSchedule),
+                error.Exception),
             _ => throw new InvalidOperationException($"Unknown result type: {result.GetType().Name}")
         };
     }
