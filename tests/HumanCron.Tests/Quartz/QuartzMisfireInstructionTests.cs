@@ -1,6 +1,7 @@
 using HumanCron.Models;
 using HumanCron.Quartz.Abstractions;
 using HumanCron.Quartz;
+using HumanCron.Quartz.Helpers;
 using Quartz;
 
 namespace HumanCron.Tests.Quartz;
@@ -633,6 +634,96 @@ public class QuartzMisfireInstructionTests
         var error = (ParseResult<TriggerBuilder>.Error)result;
         // Error should be about parsing, not misfire
         Assert.That(error.Message, Does.Not.Contain("misfire").IgnoreCase);
+    }
+
+    #endregion
+
+    #region SimpleScheduleBuilder (one-time trigger) Misfire Tests
+
+    [Test]
+    public void ApplyMisfireInstruction_SimpleSchedule_SmartPolicy_ReturnsUnmodifiedBuilder()
+    {
+        var builder = SimpleScheduleBuilder.Create().WithRepeatCount(0);
+
+        var result = MisfireInstructionHelper.ApplyMisfireInstruction(builder);
+
+        var trigger = (ISimpleTrigger)TriggerBuilder.Create().WithSchedule(result).Build();
+        Assert.That(trigger.MisfireInstruction, Is.EqualTo(MisfireInstruction.SmartPolicy));
+    }
+
+    [Test]
+    public void ApplyMisfireInstruction_SimpleSchedule_IgnoreMisfires_AppliesCorrectly()
+    {
+        var builder = SimpleScheduleBuilder.Create().WithRepeatCount(0);
+
+        var result = MisfireInstructionHelper.ApplyMisfireInstruction(builder, MisfireInstruction.IgnoreMisfirePolicy);
+
+        var trigger = (ISimpleTrigger)TriggerBuilder.Create().WithSchedule(result).Build();
+        Assert.That(trigger.MisfireInstruction, Is.EqualTo(MisfireInstruction.IgnoreMisfirePolicy));
+    }
+
+    [Test]
+    public void ApplyMisfireInstruction_SimpleSchedule_FireNow_AppliesCorrectly()
+    {
+        var builder = SimpleScheduleBuilder.Create().WithRepeatCount(0);
+
+        var result = MisfireInstructionHelper.ApplyMisfireInstruction(builder, MisfireInstruction.SimpleTrigger.FireNow);
+
+        var trigger = (ISimpleTrigger)TriggerBuilder.Create().WithSchedule(result).Build();
+        Assert.That(trigger.MisfireInstruction, Is.EqualTo(MisfireInstruction.SimpleTrigger.FireNow));
+    }
+
+    [Test]
+    public void ApplyMisfireInstruction_SimpleSchedule_RescheduleNowWithExistingCount_AppliesCorrectly()
+    {
+        var builder = SimpleScheduleBuilder.Create().WithRepeatCount(0);
+
+        var result = MisfireInstructionHelper.ApplyMisfireInstruction(builder, MisfireInstruction.SimpleTrigger.RescheduleNowWithExistingRepeatCount);
+
+        var trigger = (ISimpleTrigger)TriggerBuilder.Create().WithSchedule(result).Build();
+        Assert.That(trigger.MisfireInstruction, Is.EqualTo(MisfireInstruction.SimpleTrigger.RescheduleNowWithExistingRepeatCount));
+    }
+
+    [Test]
+    public void ApplyMisfireInstruction_SimpleSchedule_RescheduleNowWithRemainingCount_AppliesCorrectly()
+    {
+        var builder = SimpleScheduleBuilder.Create().WithRepeatCount(0);
+
+        var result = MisfireInstructionHelper.ApplyMisfireInstruction(builder, MisfireInstruction.SimpleTrigger.RescheduleNowWithRemainingRepeatCount);
+
+        var trigger = (ISimpleTrigger)TriggerBuilder.Create().WithSchedule(result).Build();
+        Assert.That(trigger.MisfireInstruction, Is.EqualTo(MisfireInstruction.SimpleTrigger.RescheduleNowWithRemainingRepeatCount));
+    }
+
+    [Test]
+    public void ApplyMisfireInstruction_SimpleSchedule_RescheduleNextWithRemainingCount_AppliesCorrectly()
+    {
+        var builder = SimpleScheduleBuilder.Create().WithRepeatCount(0);
+
+        var result = MisfireInstructionHelper.ApplyMisfireInstruction(builder, MisfireInstruction.SimpleTrigger.RescheduleNextWithRemainingCount);
+
+        var trigger = (ISimpleTrigger)TriggerBuilder.Create().WithSchedule(result).Build();
+        Assert.That(trigger.MisfireInstruction, Is.EqualTo(MisfireInstruction.SimpleTrigger.RescheduleNextWithRemainingCount));
+    }
+
+    [Test]
+    public void ApplyMisfireInstruction_SimpleSchedule_RescheduleNextWithExistingCount_AppliesCorrectly()
+    {
+        var builder = SimpleScheduleBuilder.Create().WithRepeatCount(0);
+
+        var result = MisfireInstructionHelper.ApplyMisfireInstruction(builder, MisfireInstruction.SimpleTrigger.RescheduleNextWithExistingCount);
+
+        var trigger = (ISimpleTrigger)TriggerBuilder.Create().WithSchedule(result).Build();
+        Assert.That(trigger.MisfireInstruction, Is.EqualTo(MisfireInstruction.SimpleTrigger.RescheduleNextWithExistingCount));
+    }
+
+    [Test]
+    public void ApplyMisfireInstruction_SimpleSchedule_UnknownValue_ThrowsArgumentOutOfRangeException()
+    {
+        var builder = SimpleScheduleBuilder.Create().WithRepeatCount(0);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            MisfireInstructionHelper.ApplyMisfireInstruction(builder, 999));
     }
 
     #endregion

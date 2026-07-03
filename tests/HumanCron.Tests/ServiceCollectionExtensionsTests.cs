@@ -1,5 +1,6 @@
 using HumanCron;
 using HumanCron.Abstractions;
+using HumanCron.Converters.Duration;
 using HumanCron.NCrontab.Abstractions;
 using HumanCron.Quartz.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
@@ -32,6 +33,24 @@ public class ServiceCollectionExtensionsTests
         // Assert - Base library should always register IHumanCronConverter
         var converter = provider.GetService<IHumanCronConverter>();
         Assert.That(converter, Is.Not.Null, "IHumanCronConverter should be registered by base library");
+    }
+
+    /// <summary>
+    /// Verifies that AddHumanCron() registers the duration converter
+    /// </summary>
+    [Test]
+    public void AddHumanCron_RegistersDurationConverter()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+
+        // Act
+        services.AddHumanCron();
+        var provider = services.BuildServiceProvider();
+
+        // Assert - Base library should always register IHumanDurationConverter
+        var converter = provider.GetService<IHumanDurationConverter>();
+        Assert.That(converter, Is.Not.Null, "IHumanDurationConverter should be registered by base library");
     }
 
     /// <summary>

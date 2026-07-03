@@ -702,6 +702,55 @@ var atFloor = converter.ToCron("every 15 minutes", options);
 // ParseResult<string>.Success("*/15 * * * *") - exactly at the floor is allowed (inclusive)
 ```
 
+## Duration Parsing (Bidirectional)
+
+Separate from schedule parsing - durations have no `every`/`on` prefix, so there's no grammar
+collision. `HumanDurationConverter` provides three tiers:
+
+```csharp
+using HumanCron.Converters.Duration;
+
+var converter = HumanDurationConverter.Create();
+
+// Layer 1: pure TimeSpan (no anchor, no calendar units)
+var parsed = converter.ParseDuration("1 day 2 hours 30 minutes"); // ParseResult<TimeSpan>
+var formatted = converter.FormatDuration(TimeSpan.FromMinutes(150)); // "2 hours 30 minutes"
+
+// Layer 2: anchored instant math (calendar units - months/years - supported here)
+var futureTime = converter.ToFutureTime("2 hours"); // ParseResult<DateTimeOffset>, anchored at now
+var natural = converter.ToNaturalDuration(unfreezeAt, syncCompletedAt); // ParseResult<string>
+
+// Layer 2 with an explicit timezone for DST-aware month/year math
+var newYork = DateTimeZoneProviders.Tzdb["America/New_York"];
+var precise = converter.ToFutureTime("1 month", anchor, newYork);
+```
+
+`timeZone: null` (the default) uses naive, offset-preserving math for month/year components -
+cheap, but can be off by up to an hour across a DST boundary. Passing an explicit `DateTimeZone`
+resolves the correct offset via NodaTime. This distinction only matters for month/year
+durations; fixed-unit durations (hours/minutes/seconds/days/weeks) are unaffected either way.
+
+Accepted unit vocabulary: full words (`second(s)` ... `year(s)`, including `millisecond(s)`,
+which has no schedule-side equivalent) and abbreviations `ms`, `s`, `m` (minutes), `h`, `d`,
+`w`, `M` (months), `y`. Compound durations are space-separated: `"1d 2h 30m"`. A leading `-`,
+`minus`, or `negative` parses as negative; formatting always emits a leading `-`.
+
+### Quartz one-time triggers
+
+```csharp
+using HumanCron.Quartz;
+
+var converter = QuartzScheduleConverterFactory.Create();
+var result = converter.CreateOneTimeTriggerBuilder("2 hours");
+if (result is ParseResult<TriggerBuilder>.Success success)
+{
+    var trigger = success.Value
+        .WithIdentity("unfreezeTrigger", "myGroup")
+        .ForJob("unfreezeJob", "myJobGroup")
+        .Build();
+}
+```
+
 ### ParseResult<T>
 
 ```csharp

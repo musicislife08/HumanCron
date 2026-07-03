@@ -1,6 +1,8 @@
 using HumanCron.Models;
 using HumanCron.Parsing;
+using NodaTime;
 using Quartz;
+using System;
 
 namespace HumanCron.Quartz.Abstractions;
 
@@ -168,5 +170,39 @@ public interface IQuartzScheduleConverter
     ParseResult<TriggerBuilder> CreateTriggerBuilder(
         string naturalLanguage,
         ScheduleParserOptions options,
+        int misfireInstruction = 0);
+
+    /// <summary>
+    /// Create a pre-configured one-time TriggerBuilder for a relative duration from an anchor
+    /// No repeating schedule - fires exactly once at anchor + duration
+    /// </summary>
+    /// <param name="duration">Natural language duration (e.g., "2 hours", "1d 2h 30m")</param>
+    /// <param name="anchor">Optional anchor instant (null = now)</param>
+    /// <param name="timeZone">
+    /// Optional timezone for DST-aware calendar (month/year) math (null = naive/offset-preserving,
+    /// see HumanCron.Abstractions.IHumanDurationConverter.ToFutureTime)
+    /// </param>
+    /// <param name="misfireInstruction">
+    /// Quartz misfire instruction constant (default: 0 = SmartPolicy).
+    /// Use constants from Quartz.MisfireInstruction.SimpleTrigger
+    /// </param>
+    /// <returns>ParseResult with TriggerBuilder pre-configured with StartAt and no repeating schedule</returns>
+    /// <example>
+    /// <code>
+    /// // Schedule a one-time job 2 hours from now
+    /// var result = converter.CreateOneTimeTriggerBuilder("2 hours");
+    /// if (result is ParseResult&lt;TriggerBuilder&gt;.Success success)
+    /// {
+    ///     var trigger = success.Value
+    ///         .WithIdentity("unfreezeTrigger", "myGroup")
+    ///         .ForJob("unfreezeJob", "myJobGroup")
+    ///         .Build();
+    /// }
+    /// </code>
+    /// </example>
+    ParseResult<TriggerBuilder> CreateOneTimeTriggerBuilder(
+        string duration,
+        DateTimeOffset? anchor = null,
+        DateTimeZone? timeZone = null,
         int misfireInstruction = 0);
 }

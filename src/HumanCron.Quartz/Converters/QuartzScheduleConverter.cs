@@ -1,6 +1,7 @@
 using HumanCron.Models;
 using HumanCron.Models.Internal;
 using HumanCron.Abstractions;
+using HumanCron.Converters.Duration;
 using HumanCron.Quartz.Abstractions;
 using HumanCron.Quartz.Helpers;
 using Quartz;
@@ -24,6 +25,7 @@ public sealed class QuartzScheduleConverter : IQuartzScheduleConverter
     private readonly QuartzScheduleBuilder _quartzBuilder;
     private readonly QuartzScheduleParser _quartzParser;
     private readonly DateTimeZone _localTimeZone;
+    private readonly IHumanDurationConverter _durationConverter;
 
     /// <summary>
     /// Internal constructor for dependency injection (tests only)
@@ -39,6 +41,7 @@ public sealed class QuartzScheduleConverter : IQuartzScheduleConverter
         _localTimeZone = localTimeZone ?? throw new ArgumentNullException(nameof(localTimeZone));
         _quartzBuilder = new QuartzScheduleBuilder(clock ?? throw new ArgumentNullException(nameof(clock)));
         _quartzParser = new QuartzScheduleParser();
+        _durationConverter = new HumanDurationConverter(clock);
     }
 
     public ParseResult<IScheduleBuilder> ToQuartzSchedule(
@@ -250,6 +253,31 @@ public sealed class QuartzScheduleConverter : IQuartzScheduleConverter
         // Explicitly convert to UTC to ensure Quartz interprets it correctly
         var startTimeUtc = startSuccess.Value.Value.ToUniversalTime();
         triggerBuilder.StartAt(startTimeUtc);
+
+        return new ParseResult<TriggerBuilder>.Success(triggerBuilder);
+    }
+
+    /// <inheritdoc/>
+    public ParseResult<TriggerBuilder> CreateOneTimeTriggerBuilder(
+        string duration,
+        DateTimeOffset? anchor = null,
+        DateTimeZone? timeZone = null,
+        int misfireInstruction = 0)
+    {
+        var futureTimeResult = _durationConverter.ToFutureTime(duration, anchor, timeZone);
+        if (futureTimeResult is not ParseResult<DateTimeOffset>.Success success)
+        {
+            var error = (ParseResult<DateTimeOffset>.Error)futureTimeResult;
+            return new ParseResult<TriggerBuilder>.Error(error.Message);
+        }
+
+        var scheduleBuilder = MisfireInstructionHelper.ApplyMisfireInstruction(
+            SimpleScheduleBuilder.Create().WithRepeatCount(0),
+            misfireInstruction);
+
+        var triggerBuilder = TriggerBuilder.Create()
+            .WithSchedule(scheduleBuilder)
+            .StartAt(success.Value.ToUniversalTime());
 
         return new ParseResult<TriggerBuilder>.Success(triggerBuilder);
     }
