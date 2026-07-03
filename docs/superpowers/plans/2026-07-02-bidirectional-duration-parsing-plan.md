@@ -1676,7 +1676,7 @@ Modify `src/HumanCron.Quartz/Converters/QuartzScheduleConverter.cs`:
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         _formatter = formatter ?? throw new ArgumentNullException(nameof(formatter));
         _localTimeZone = localTimeZone ?? throw new ArgumentNullException(nameof(localTimeZone));
-        _quartzBuilder = new QuartzScheduleBuilder(clock ?? throw new ArgumentNullException(nameof(clock)), localTimeZone);
+        _quartzBuilder = new QuartzScheduleBuilder(clock ?? throw new ArgumentNullException(nameof(clock)));
         _quartzParser = new QuartzScheduleParser();
         _durationConverter = new HumanDurationConverter(clock);
     }
