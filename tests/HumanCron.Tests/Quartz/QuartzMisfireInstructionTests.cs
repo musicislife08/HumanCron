@@ -466,8 +466,9 @@ public class QuartzMisfireInstructionTests
         // Act
         var result = _converter.CreateTriggerBuilder(natural, invalidMisfire);
 
-        // Assert - CreateTriggerBuilder propagates only the clean Message from
-        // the underlying ToQuartzSchedule error (not its Exception).
+        // Assert - clean Message check; see
+        // CreateTriggerBuilder_WithInvalidMisfireValue_PropagatesException below
+        // for the Exception-propagation assertions.
         Assert.That(result, Is.TypeOf<ParseResult<TriggerBuilder>.Error>());
         var error = (ParseResult<TriggerBuilder>.Error)result;
         Assert.That(error.Message, Does.Contain("Quartz schedule").IgnoreCase);
@@ -585,11 +586,15 @@ public class QuartzMisfireInstructionTests
         // Act
         var result = _converter.CreateTriggerBuilder(natural, invalidMisfire);
 
-        // Assert - CreateTriggerBuilder propagates only the clean Message from
-        // the underlying ToQuartzSchedule error (not its Exception).
+        // Assert - clean Message check; CreateTriggerBuilder also propagates
+        // the underlying ToQuartzSchedule error's Exception (see the negative
+        // misfire value test above for the equivalent assertion).
         Assert.That(result, Is.TypeOf<ParseResult<TriggerBuilder>.Error>());
         var error = (ParseResult<TriggerBuilder>.Error)result;
         Assert.That(error.Message, Does.Contain("Quartz schedule").IgnoreCase);
+        Assert.That(error.Exception, Is.Not.Null);
+        Assert.That(error.Exception!.Message, Does.Contain("misfire").IgnoreCase);
+        Assert.That(error.Exception!.Message, Does.Contain(invalidMisfire.ToString()));
     }
 
     [Test]
