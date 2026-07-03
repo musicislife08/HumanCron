@@ -113,7 +113,7 @@ internal sealed partial class UnixCronParser
         }
         catch (Exception ex)
         {
-            return new ParseResult<ScheduleSpec>.Error($"Failed to parse cron expression: {ex.Message}");
+            return new ParseResult<ScheduleSpec>.Error("Failed to parse cron expression", ex);
         }
     }
 }

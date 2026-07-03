@@ -445,11 +445,15 @@ public class QuartzMisfireInstructionTests
         // Act
         var result = _converter.ToQuartzSchedule(natural, invalidMisfire);
 
-        // Assert
+        // Assert - Message is now a clean, stable string; the underlying
+        // ArgumentOutOfRangeException (with the "misfire"/"999" detail) is
+        // carried separately via Error.Exception.
         Assert.That(result, Is.TypeOf<ParseResult<IScheduleBuilder>.Error>());
         var error = (ParseResult<IScheduleBuilder>.Error)result;
-        Assert.That(error.Message, Does.Contain("misfire").IgnoreCase);
-        Assert.That(error.Message, Does.Contain("999"));
+        Assert.That(error.Message, Does.Contain("Quartz schedule").IgnoreCase);
+        Assert.That(error.Exception, Is.Not.Null);
+        Assert.That(error.Exception!.Message, Does.Contain("misfire").IgnoreCase);
+        Assert.That(error.Exception!.Message, Does.Contain("999"));
     }
 
     [Test]
@@ -462,11 +466,11 @@ public class QuartzMisfireInstructionTests
         // Act
         var result = _converter.CreateTriggerBuilder(natural, invalidMisfire);
 
-        // Assert
+        // Assert - CreateTriggerBuilder propagates only the clean Message from
+        // the underlying ToQuartzSchedule error (not its Exception).
         Assert.That(result, Is.TypeOf<ParseResult<TriggerBuilder>.Error>());
         var error = (ParseResult<TriggerBuilder>.Error)result;
-        Assert.That(error.Message, Does.Contain("misfire").IgnoreCase);
-        Assert.That(error.Message, Does.Contain("999"));
+        Assert.That(error.Message, Does.Contain("Quartz schedule").IgnoreCase);
     }
 
     [Test]
@@ -538,11 +542,15 @@ public class QuartzMisfireInstructionTests
         // Act
         var result = _converter.ToQuartzSchedule(natural, invalidMisfire);
 
-        // Assert
+        // Assert - Message is now a clean, stable string; the underlying
+        // ArgumentOutOfRangeException (with the misfire value detail) is
+        // carried separately via Error.Exception.
         Assert.That(result, Is.TypeOf<ParseResult<IScheduleBuilder>.Error>());
         var error = (ParseResult<IScheduleBuilder>.Error)result;
-        Assert.That(error.Message, Does.Contain("misfire").IgnoreCase);
-        Assert.That(error.Message, Does.Contain(invalidMisfire.ToString()));
+        Assert.That(error.Message, Does.Contain("Quartz schedule").IgnoreCase);
+        Assert.That(error.Exception, Is.Not.Null);
+        Assert.That(error.Exception!.Message, Does.Contain("misfire").IgnoreCase);
+        Assert.That(error.Exception!.Message, Does.Contain(invalidMisfire.ToString()));
     }
 
     [TestCase(int.MaxValue)]
@@ -556,11 +564,11 @@ public class QuartzMisfireInstructionTests
         // Act
         var result = _converter.CreateTriggerBuilder(natural, invalidMisfire);
 
-        // Assert
+        // Assert - CreateTriggerBuilder propagates only the clean Message from
+        // the underlying ToQuartzSchedule error (not its Exception).
         Assert.That(result, Is.TypeOf<ParseResult<TriggerBuilder>.Error>());
         var error = (ParseResult<TriggerBuilder>.Error)result;
-        Assert.That(error.Message, Does.Contain("misfire").IgnoreCase);
-        Assert.That(error.Message, Does.Contain(invalidMisfire.ToString()));
+        Assert.That(error.Message, Does.Contain("Quartz schedule").IgnoreCase);
     }
 
     [Test]

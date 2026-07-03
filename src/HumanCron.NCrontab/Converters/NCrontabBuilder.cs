@@ -60,7 +60,7 @@ internal sealed class NCrontabBuilder
         }
         catch (Exception ex)
         {
-            return new ParseResult<string>.Error($"Failed to build NCrontab expression: {ex.Message}");
+            return new ParseResult<string>.Error("Failed to build NCrontab expression", ex);
         }
     }
 

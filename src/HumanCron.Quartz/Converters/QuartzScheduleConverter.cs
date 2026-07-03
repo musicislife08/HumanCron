@@ -124,7 +124,7 @@ public sealed class QuartzScheduleConverter : IQuartzScheduleConverter
         }
         catch (Exception ex)
         {
-            return new ParseResult<IScheduleBuilder>.Error($"Failed to build Quartz schedule: {ex.Message}");
+            return new ParseResult<IScheduleBuilder>.Error("Failed to build Quartz schedule", ex);
         }
     }
 

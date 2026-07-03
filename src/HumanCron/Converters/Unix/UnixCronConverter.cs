@@ -161,7 +161,7 @@ public sealed class UnixCronConverter : IHumanCronConverter
         }
         catch (Exception ex)
         {
-            return new ParseResult<string>.Error($"Failed to format as natural language: {ex.Message}");
+            return new ParseResult<string>.Error("Failed to format schedule as natural language", ex);
         }
     }
 }
