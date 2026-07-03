@@ -305,6 +305,37 @@ public class HumanDurationConverterTests
     }
 
     [Test]
+    public void ToNaturalDuration_PreciseMode_OneDayAcrossSpringForward_RoundTripsExactly()
+    {
+        var newYork = DateTimeZoneProviders.Tzdb["America/New_York"];
+        var anchor = new DateTimeOffset(2026, 3, 8, 1, 30, 0, TimeSpan.FromHours(-5));
+
+        var futureResult = _converter.ToFutureTime("1 day", anchor, newYork);
+        Assert.That(futureResult, Is.TypeOf<ParseResult<DateTimeOffset>.Success>());
+        var target = ((ParseResult<DateTimeOffset>.Success)futureResult).Value;
+
+        var naturalResult = _converter.ToNaturalDuration(target, anchor, newYork);
+        Assert.That(naturalResult, Is.TypeOf<ParseResult<string>.Success>());
+        Assert.That(((ParseResult<string>.Success)naturalResult).Value, Is.EqualTo("1 day"));
+    }
+
+    [Test]
+    public void ToNaturalDuration_PreciseMode_OneWeekAcrossFallBack_RoundTripsExactly()
+    {
+        var newYork = DateTimeZoneProviders.Tzdb["America/New_York"];
+        // US fall-back in 2026 is November 1st (clocks go back 2:00am -> 1:00am)
+        var anchor = new DateTimeOffset(2026, 10, 29, 1, 30, 0, TimeSpan.FromHours(-4));
+
+        var futureResult = _converter.ToFutureTime("1 week", anchor, newYork);
+        Assert.That(futureResult, Is.TypeOf<ParseResult<DateTimeOffset>.Success>());
+        var target = ((ParseResult<DateTimeOffset>.Success)futureResult).Value;
+
+        var naturalResult = _converter.ToNaturalDuration(target, anchor, newYork);
+        Assert.That(naturalResult, Is.TypeOf<ParseResult<string>.Success>());
+        Assert.That(((ParseResult<string>.Success)naturalResult).Value, Is.EqualTo("1 week"));
+    }
+
+    [Test]
     public void ToNaturalDuration_NullAnchor_UsesInjectedClock()
     {
         var fakeClock = new FakeClock(Instant.FromUtc(2026, 6, 1, 12, 0, 0));

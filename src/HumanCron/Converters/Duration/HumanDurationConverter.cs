@@ -153,15 +153,36 @@ public sealed class HumanDurationConverter : IHumanDurationConverter
 
     private static Period PeriodBetweenNaive(DateTimeOffset anchor, DateTimeOffset target)
     {
-        var anchorLocal = OffsetDateTime.FromDateTimeOffset(anchor).LocalDateTime;
-        var targetLocal = OffsetDateTime.FromDateTimeOffset(target).LocalDateTime;
-        return Period.Between(anchorLocal, targetLocal);
+        var anchorOffsetDateTime = OffsetDateTime.FromDateTimeOffset(anchor);
+        var targetOffsetDateTime = OffsetDateTime.FromDateTimeOffset(target);
+
+        var calendarPeriod = Period.Between(
+            anchorOffsetDateTime.LocalDateTime, targetOffsetDateTime.LocalDateTime,
+            PeriodUnits.Years | PeriodUnits.Months);
+
+        var afterCalendar = new OffsetDateTime(
+            anchorOffsetDateTime.LocalDateTime.Plus(calendarPeriod), anchorOffsetDateTime.Offset);
+
+        var remainder = targetOffsetDateTime.ToInstant() - afterCalendar.ToInstant();
+        var remainderPeriod = Period.FromTicks(remainder.ToTimeSpan().Ticks).Normalize();
+
+        return calendarPeriod + remainderPeriod;
     }
 
     private static Period PeriodBetweenPrecise(DateTimeOffset anchor, DateTimeOffset target, DateTimeZone timeZone)
     {
-        var anchorLocal = Instant.FromDateTimeOffset(anchor).InZone(timeZone).LocalDateTime;
-        var targetLocal = Instant.FromDateTimeOffset(target).InZone(timeZone).LocalDateTime;
-        return Period.Between(anchorLocal, targetLocal);
+        var anchorZoned = Instant.FromDateTimeOffset(anchor).InZone(timeZone);
+        var targetZoned = Instant.FromDateTimeOffset(target).InZone(timeZone);
+
+        var calendarPeriod = Period.Between(
+            anchorZoned.LocalDateTime, targetZoned.LocalDateTime,
+            PeriodUnits.Years | PeriodUnits.Months);
+
+        var afterCalendar = timeZone.AtLeniently(anchorZoned.LocalDateTime.Plus(calendarPeriod));
+
+        var remainder = targetZoned.ToInstant() - afterCalendar.ToInstant();
+        var remainderPeriod = Period.FromTicks(remainder.ToTimeSpan().Ticks).Normalize();
+
+        return calendarPeriod + remainderPeriod;
     }
 }
