@@ -2,21 +2,13 @@ name: Claude Code Review
 
 on:
   pull_request:
-    types: [opened, synchronize]
-    # Optional: Only run on specific file changes
-    # paths:
-    #   - "src/**/*.ts"
-    #   - "src/**/*.tsx"
-    #   - "src/**/*.js"
-    #   - "src/**/*.jsx"
+    types: [opened]  # Only run once on PR creation, not on every commit
+  # Note: Manual @claude mentions are handled by claude.yml workflow
 
 jobs:
   claude-review:
-    # Optional: Filter by PR author
-    # if: |
-    #   github.event.pull_request.user.login == 'external-contributor' ||
-    #   github.event.pull_request.user.login == 'new-developer' ||
-    #   github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR'
+    # Only run on PR opened events (automatic review on new PRs)
+    if: github.event_name == 'pull_request'
 
     runs-on: ubuntu-latest
     permissions:
@@ -24,6 +16,7 @@ jobs:
       pull-requests: read
       issues: read
       id-token: write
+      actions: read # Required for Claude to read CI results on PRs
 
     steps:
       - name: Checkout repository
@@ -36,6 +29,11 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+          # This is an optional setting that allows Claude to read CI results on PRs
+          additional_permissions: |
+            actions: read
+
           prompt: |
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ github.event.pull_request.number }}
@@ -49,9 +47,17 @@ jobs:
 
             Use the repository's CLAUDE.md for guidance on style and conventions. Be constructive and helpful in your feedback.
 
-            Use `gh pr comment` with your Bash tool to leave your review as a comment on the PR.
+            IMPORTANT: Never use # followed by a number (e.g. #1, #2, #3) when numbering findings or list items. GitHub renders these as issue/PR links, which pollutes unrelated issues with cross-references. Use "1.", "2.", "3." or "Finding 1:", "Finding 2:" etc. instead.
+
+            When your review is complete, post it as a single PR comment using this exact pattern:
+
+            gh pr comment $PR_NUMBER --repo $REPO --body "$(cat <<'REVIEW_EOF'
+            Your review content here (markdown is fine, no escaping needed)
+            REVIEW_EOF
+            )"
+
+            This heredoc approach avoids all shell escaping issues with quotes, backticks, and special characters in your review text. Do NOT use gh api, do NOT write to /tmp or any files, do NOT use Python — just the heredoc pattern above.
 
           # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
           # or https://docs.claude.com/en/docs/claude-code/cli-reference for available options
-          claude_args: '--allowed-tools "Bash(gh issue view:*),Bash(gh search:*),Bash(gh issue list:*),Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*)"'
-
+          claude_args: '--allowed-tools "Read,Grep,Glob,Bash(gh issue view:*),Bash(gh search:*),Bash(gh issue list:*),Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*)"'
