@@ -1,4 +1,5 @@
 using HumanCron.Models;
+using NodaTime;
 using System;
 
 namespace HumanCron.Abstractions;
@@ -54,4 +55,60 @@ public interface IHumanDurationConverter
     /// </code>
     /// </example>
     string FormatDuration(TimeSpan duration);
+
+    /// <summary>
+    /// Parse a natural language duration and add it to an anchor instant, producing a future
+    /// (or past, if the duration is negative) DateTimeOffset
+    /// </summary>
+    /// <param name="duration">
+    /// Natural language duration, including month/year units (e.g., "2 hours", "1 month")
+    /// </param>
+    /// <param name="anchor">Anchor instant (null = now, via the converter's injected clock)</param>
+    /// <param name="timeZone">
+    /// Governs precision for month/year components only. Null (default) uses Mode 1: naive,
+    /// offset-preserving math - cheap, but can be off by up to an hour across a DST boundary
+    /// when the duration includes month/year units. A non-null zone uses Mode 2: precise,
+    /// DST-aware math via NodaTime's ZonedDateTime and DateTimeZone.AtLeniently. Fixed-unit-only
+    /// durations (hours/minutes/seconds/days/weeks) produce the identical result either way.
+    /// </param>
+    /// <returns>The computed instant, or an Error if the duration is unparseable</returns>
+    /// <example>
+    /// <code>
+    /// var result = converter.ToFutureTime("2 hours");
+    /// if (result is ParseResult&lt;DateTimeOffset&gt;.Success success)
+    /// {
+    ///     Console.WriteLine(success.Value); // now + 2 hours
+    /// }
+    /// </code>
+    /// </example>
+    ParseResult<DateTimeOffset> ToFutureTime(
+        string duration,
+        DateTimeOffset? anchor = null,
+        DateTimeZone? timeZone = null);
+
+    /// <summary>
+    /// Format the difference between a target instant and an anchor as a natural language duration
+    /// </summary>
+    /// <param name="target">The instant to describe, relative to the anchor</param>
+    /// <param name="anchor">Anchor instant (null = now, via the converter's injected clock)</param>
+    /// <param name="timeZone">
+    /// Governs precision for calendar-unit decomposition (see ToFutureTime). Null (default) uses
+    /// Mode 1: naive math on each value's own embedded offset. A non-null zone uses Mode 2:
+    /// resolves both instants through that zone before diffing.
+    /// </param>
+    /// <returns>
+    /// Natural language duration (e.g., "1 hour 23 minutes"). A target before the anchor formats
+    /// with a leading "-", same as a negative TimeSpan. Never errors - target/anchor are always
+    /// valid DateTimeOffset values.
+    /// </returns>
+    /// <example>
+    /// <code>
+    /// var result = converter.ToNaturalDuration(unfreezeAt, syncCompletedAt);
+    /// // ParseResult&lt;string&gt;.Success("2 hours")
+    /// </code>
+    /// </example>
+    ParseResult<string> ToNaturalDuration(
+        DateTimeOffset target,
+        DateTimeOffset? anchor = null,
+        DateTimeZone? timeZone = null);
 }

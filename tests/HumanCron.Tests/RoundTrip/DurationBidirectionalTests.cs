@@ -1,6 +1,7 @@
 using HumanCron.Abstractions;
 using HumanCron.Converters.Duration;
 using HumanCron.Models;
+using NodaTime;
 
 namespace HumanCron.Tests.RoundTrip;
 
@@ -49,5 +50,34 @@ public class DurationBidirectionalTests
         var formatted = _converter.FormatDuration(parsed);
 
         Assert.That(formatted, Is.EqualTo("1 hour 30 minutes"));
+    }
+
+    [Test]
+    public void RoundTrip_AnchoredFixedUnit_ToFutureTimeThenToNaturalDuration()
+    {
+        var anchor = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+
+        var futureResult = _converter.ToFutureTime("2 hours 30 minutes", anchor);
+        Assert.That(futureResult, Is.TypeOf<ParseResult<DateTimeOffset>.Success>());
+        var target = ((ParseResult<DateTimeOffset>.Success)futureResult).Value;
+
+        var naturalResult = _converter.ToNaturalDuration(target, anchor);
+        Assert.That(naturalResult, Is.TypeOf<ParseResult<string>.Success>());
+        Assert.That(((ParseResult<string>.Success)naturalResult).Value, Is.EqualTo("2 hours 30 minutes"));
+    }
+
+    [Test]
+    public void RoundTrip_AnchoredCalendarUnit_PreciseMode_RoundTripsExactly()
+    {
+        var newYork = DateTimeZoneProviders.Tzdb["America/New_York"];
+        var anchor = new DateTimeOffset(2026, 3, 8, 1, 30, 0, TimeSpan.FromHours(-5));
+
+        var futureResult = _converter.ToFutureTime("1 month", anchor, newYork);
+        Assert.That(futureResult, Is.TypeOf<ParseResult<DateTimeOffset>.Success>());
+        var target = ((ParseResult<DateTimeOffset>.Success)futureResult).Value;
+
+        var naturalResult = _converter.ToNaturalDuration(target, anchor, newYork);
+        Assert.That(naturalResult, Is.TypeOf<ParseResult<string>.Success>());
+        Assert.That(((ParseResult<string>.Success)naturalResult).Value, Is.EqualTo("1 month"));
     }
 }
