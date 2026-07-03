@@ -1,4 +1,5 @@
 using HumanCron.Models;
+using HumanCron.Parsing;
 using NodaTime;
 
 namespace HumanCron.Abstractions;
@@ -46,6 +47,26 @@ public interface IHumanCronConverter
     /// </param>
     /// <returns>Unix 5-part cron expression (e.g., "0 14 * * *")</returns>
     ParseResult<string> ToCron(string naturalLanguage, DateTimeZone? userTimezone);
+
+    /// <summary>
+    /// Convert natural language to Unix 5-part cron expression, with full parser options
+    /// (timezone and/or a MinInterval floor)
+    /// </summary>
+    /// <param name="naturalLanguage">Natural language schedule (e.g., "1d at 2pm")</param>
+    /// <param name="options">
+    /// Parser options. Unlike the DateTimeZone? overload, options.TimeZone is used exactly
+    /// as given (default = system timezone) - there is no per-converter local-timezone
+    /// fallback once you pass this object yourself, matching System.Text.Json's
+    /// JsonSerializerOptions.
+    /// </param>
+    /// <returns>Unix 5-part cron expression, or an Error if MinInterval is set and violated</returns>
+    /// <example>
+    /// <code>
+    /// var options = new ScheduleParserOptions { MinInterval = TimeSpan.FromMinutes(15) };
+    /// var result = converter.ToCron("every 5 minutes", options); // Error: runs more often than 15 minutes
+    /// </code>
+    /// </example>
+    ParseResult<string> ToCron(string naturalLanguage, ScheduleParserOptions options);
 
     /// <summary>
     /// Convert Unix 5-part cron expression back to natural language

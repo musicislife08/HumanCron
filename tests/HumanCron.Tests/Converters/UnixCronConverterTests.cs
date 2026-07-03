@@ -1238,4 +1238,20 @@ public class UnixCronConverterTests
     }
 
     #endregion
+
+    #region ScheduleParserOptions Overload
+
+    [Test]
+    public void ToCron_ScheduleParserOptionsOverload_EnforcesMinIntervalFloor()
+    {
+        var options = new ScheduleParserOptions { MinInterval = TimeSpan.FromMinutes(15) };
+
+        var tooFast = _converter.ToCron("every 5 minutes", options);
+        var atFloor = _converter.ToCron("every 15 minutes", options);
+
+        Assert.That(tooFast, Is.TypeOf<ParseResult<string>.Error>());
+        Assert.That(atFloor, Is.TypeOf<ParseResult<string>.Success>());
+    }
+
+    #endregion
 }
