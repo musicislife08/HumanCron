@@ -282,7 +282,7 @@ var result = _parser.Parse("every 2 weeks on sunday at 2pm", options);
 var trigger = result switch
 {
     ParseResult<ScheduleSpec>.Success(var spec) => CreateTrigger(spec),
-    ParseResult<ScheduleSpec>.Error(var message) => throw new ArgumentException(message),
+    ParseResult<ScheduleSpec>.Error error => throw new ArgumentException(error.Message, error.Exception),
     _ => throw new InvalidOperationException("Unexpected parse result type")
 };
 ```
@@ -570,13 +570,24 @@ var result = _parser.Parse(userInput, options);
 
 if (result is ParseResult<ScheduleSpec>.Error error)
 {
-    // Error messages are user-friendly and explain what's wrong
+    // error.Message is always a clean, stable string - safe to show directly
+    // to a user, never an interpolated exception message.
     Console.WriteLine($"Parse error: {error.Message}");
 
     // Examples of error messages:
     // - "Invalid interval number: abc (expected a positive integer)"
     // - "Invalid hour for 12-hour format: 13 (must be 1-12 with am/pm)"
     // - "Day-of-month (on 15) is only valid with monthly (M) or yearly (y) intervals"
+
+    // If the failure came from an internal catch site rather than input
+    // validation, error.Exception carries the original exception (type,
+    // stack trace, real InnerException chain) for logging/tracing - null
+    // for ordinary validation errors like the ones above.
+    if (error.Exception is not null)
+    {
+        _logger.LogError(error.Exception, "Schedule parse failed unexpectedly");
+    }
+
     return;
 }
 
@@ -592,6 +603,11 @@ catch (NotSupportedException ex)
     Console.WriteLine($"Unsupported pattern: {ex.Message}");
 }
 ```
+
+All three schedule converters (`ToCron`, `ToNCrontab`, `ToQuartzSchedule`) and
+`HumanDurationConverter`'s duration APIs return identically-shaped,
+unprefixed parser error messages for the same invalid input - there is no
+per-converter wrapping to account for.
 
 ## Testing Integration
 
@@ -757,9 +773,16 @@ if (result is ParseResult<TriggerBuilder>.Success success)
 public abstract record ParseResult<T>
 {
     public sealed record Success(T Value) : ParseResult<T>;
-    public sealed record Error(string Message) : ParseResult<T>;
+    public sealed record Error(string Message, Exception? Exception = null) : ParseResult<T>;
 }
 ```
+
+`Error.Message` is always a clean, stable string safe to show directly to a
+user. `Error.Exception` is populated only when the failure came from an
+unexpected internal exception rather than ordinary input validation - it
+carries the original exception (type, stack trace, real `InnerException`
+chain) for logging/tracing, and is `null` for the common case of an invalid
+schedule/duration string.
 
 ## Integration Ideas
 

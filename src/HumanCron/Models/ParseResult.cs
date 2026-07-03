@@ -1,3 +1,5 @@
+using System;
+
 namespace HumanCron.Models;
 
 /// <summary>
@@ -12,9 +14,12 @@ public abstract record ParseResult<T>
     public sealed record Success(T Value) : ParseResult<T>;
 
     /// <summary>
-    /// Failed parse result containing an error message
+    /// Failed parse result containing an error message and, optionally, the
+    /// original exception that caused the failure (for logging/tracing —
+    /// the Message itself is always a clean, stable string safe to show
+    /// directly to a user).
     /// </summary>
-    public sealed record Error(string Message) : ParseResult<T>;
+    public sealed record Error(string Message, Exception? Exception = null) : ParseResult<T>;
 
     // Prevent external inheritance - only Success and Error are valid
     private ParseResult() { }

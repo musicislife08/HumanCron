@@ -115,7 +115,7 @@ public sealed class UnixCronConverter : IHumanCronConverter
         var parseResult = _parser.Parse(naturalLanguage, options);
         if (parseResult is ParseResult<ScheduleSpec>.Error parseError)
         {
-            return new ParseResult<string>.Error($"Failed to parse natural language: {parseError.Message}");
+            return new ParseResult<string>.Error(parseError.Message);
         }
 
         var spec = ((ParseResult<ScheduleSpec>.Success)parseResult).Value;
@@ -124,7 +124,8 @@ public sealed class UnixCronConverter : IHumanCronConverter
         var buildResult = _cronBuilder.Build(spec);
         if (buildResult is ParseResult<string>.Error buildError)
         {
-            return new ParseResult<string>.Error($"Failed to convert to cron: {buildError.Message}");
+            return new ParseResult<string>.Error(
+                $"Failed to convert to cron: {buildError.Message}", buildError.Exception);
         }
 
         return buildResult;
@@ -148,7 +149,8 @@ public sealed class UnixCronConverter : IHumanCronConverter
         var parseResult = _cronParser.Parse(cronExpression);
         if (parseResult is ParseResult<ScheduleSpec>.Error parseError)
         {
-            return new ParseResult<string>.Error($"Failed to parse cron expression: {parseError.Message}");
+            return new ParseResult<string>.Error(
+                $"Failed to parse cron expression: {parseError.Message}", parseError.Exception);
         }
 
         var spec = ((ParseResult<ScheduleSpec>.Success)parseResult).Value;
@@ -161,7 +163,7 @@ public sealed class UnixCronConverter : IHumanCronConverter
         }
         catch (Exception ex)
         {
-            return new ParseResult<string>.Error($"Failed to format as natural language: {ex.Message}");
+            return new ParseResult<string>.Error("Failed to format schedule as natural language", ex);
         }
     }
 }

@@ -12,8 +12,8 @@ Human-readable cron expression converter with bidirectional support and timezone
 - ⏰ **Timezone Aware** - Proper DST handling using NodaTime
 - 🔄 **Bidirectional** - Convert to/from cron expressions with full specification compliance
 - 🔌 **Multiple Integrations** - Quartz.NET, Hangfire, and NCrontab support
-- ⏲️ **Duration Parsing** - Convert between natural language durations and TimeSpan with calendar unit support - see [Integration Guide](src/HumanCron/INTEGRATION.md#duration-parsing-bidirectional) for full API
-- 🛡️ **Minimum Interval Floor** - Reject schedules that fire more often than an allowed floor via `ScheduleParserOptions.MinInterval` - see [Integration Guide](src/HumanCron/INTEGRATION.md#rejecting-schedules-that-fire-too-often-mininterval) for full API
+- ⏲️ **Duration Parsing** - Convert between natural language durations and TimeSpan with calendar unit support - see [Integration Guide](INTEGRATION.md#duration-parsing-bidirectional) for full API
+- 🛡️ **Minimum Interval Floor** - Reject schedules that fire more often than an allowed floor via `ScheduleParserOptions.MinInterval` - see [Integration Guide](INTEGRATION.md#rejecting-schedules-that-fire-too-often-mininterval) for full API
 - 📅 **Month Support** - Select specific months, ranges, or lists
 - 🎯 **Full Cron Spec Support** - Complete Unix (5-field), NCrontab (6-field), and Quartz (6-7 field) cron syntax including lists, ranges, steps, named values, and Quartz-specific features (L, W, #)
 - ⏱️ **Seconds Precision** - NCrontab and Hangfire support for second-level scheduling
@@ -208,7 +208,7 @@ var naturalResult = converter.ToNaturalDuration(unfreezeAt, syncCompletedAt);
 ```
 
 Month/year durations need an explicit `DateTimeZone` for DST-correct math - see the
-[Integration Guide](src/HumanCron/INTEGRATION.md#duration-parsing-bidirectional) for the
+[Integration Guide](INTEGRATION.md#duration-parsing-bidirectional) for the
 naive-vs-precise mode distinction and the Quartz one-time-trigger helper.
 
 ### Minimum Interval Floor (MinInterval)
@@ -229,7 +229,7 @@ var atFloor = converter.ToCron("every 15 minutes", options);
 
 Available on all three converters (`IHumanCronConverter`, `INCrontabConverter`,
 `IQuartzScheduleConverter`) via the `ScheduleParserOptions` overload - see the
-[Integration Guide](src/HumanCron/INTEGRATION.md#rejecting-schedules-that-fire-too-often-mininterval)
+[Integration Guide](INTEGRATION.md#rejecting-schedules-that-fire-too-often-mininterval)
 for details.
 
 ## Supported Syntax
@@ -478,9 +478,9 @@ var back2 = converter.ToNaturalLanguage(cron2);                                 
 
 ## Documentation
 
-- **[Architecture](src/HumanCron/ARCHITECTURE.md)** - Design philosophy and implementation details
-- **[DSL Specification](src/HumanCron/DSL-SPECIFICATION.md)** - Complete grammar and validation rules
-- **[Integration Guide](src/HumanCron/INTEGRATION.md)** - Usage patterns, timezone handling, testing
+- **[Architecture](ARCHITECTURE.md)** - Design philosophy and implementation details
+- **[DSL Specification](DSL-SPECIFICATION.md)** - Complete grammar and validation rules
+- **[Integration Guide](INTEGRATION.md)** - Usage patterns, timezone handling, testing
 
 ## Contributing
 

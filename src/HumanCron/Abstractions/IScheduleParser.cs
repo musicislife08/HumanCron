@@ -23,7 +23,7 @@ namespace HumanCron.Abstractions;
 /// var schedule = result2 switch
 /// {
 ///     ParseResult&lt;ScheduleSpec&gt;.Success(var spec) => ConvertToCron(spec),
-///     ParseResult&lt;ScheduleSpec&gt;.Error(var message) => throw new Exception(message),
+///     ParseResult&lt;ScheduleSpec&gt;.Error error => throw new Exception(error.Message),
 ///     _ => throw new InvalidOperationException()
 /// };
 /// </code>

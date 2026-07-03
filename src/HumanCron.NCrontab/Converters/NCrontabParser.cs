@@ -130,7 +130,7 @@ internal sealed class NCrontabParser
         }
         catch (Exception ex)
         {
-            return new ParseResult<ScheduleSpec>.Error($"Failed to parse NCrontab expression: {ex.Message}");
+            return new ParseResult<ScheduleSpec>.Error("Failed to parse NCrontab expression", ex);
         }
     }
 

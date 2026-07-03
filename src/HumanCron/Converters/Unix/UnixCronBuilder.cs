@@ -63,7 +63,7 @@ internal sealed class UnixCronBuilder
         }
         catch (Exception ex)
         {
-            return new ParseResult<string>.Error($"Failed to build cron expression: {ex.Message}");
+            return new ParseResult<string>.Error("Failed to build cron expression", ex);
         }
     }
 

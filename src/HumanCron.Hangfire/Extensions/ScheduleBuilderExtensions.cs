@@ -138,7 +138,7 @@ public static class ScheduleBuilderExtensions
             {
                 ParseResult<string>.Success success => success.Value,
                 ParseResult<string>.Error error => throw new InvalidOperationException(
-                    $"Failed to convert schedule to NCrontab: {error.Message}"),
+                    $"Failed to convert schedule to NCrontab: {error.Message}", error.Exception),
                 _ => throw new InvalidOperationException($"Unknown result type: {result.GetType().Name}")
             };
         }

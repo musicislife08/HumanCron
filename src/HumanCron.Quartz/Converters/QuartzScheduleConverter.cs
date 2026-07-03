@@ -124,7 +124,7 @@ public sealed class QuartzScheduleConverter : IQuartzScheduleConverter
         }
         catch (Exception ex)
         {
-            return new ParseResult<IScheduleBuilder>.Error($"Failed to build Quartz schedule: {ex.Message}");
+            return new ParseResult<IScheduleBuilder>.Error("Failed to build Quartz schedule", ex);
         }
     }
 
@@ -195,7 +195,7 @@ public sealed class QuartzScheduleConverter : IQuartzScheduleConverter
         if (scheduleResult is not ParseResult<IScheduleBuilder>.Success scheduleSuccess)
         {
             var error = (ParseResult<IScheduleBuilder>.Error)scheduleResult;
-            return new ParseResult<TriggerBuilder>.Error(error.Message);
+            return new ParseResult<TriggerBuilder>.Error(error.Message, error.Exception);
         }
 
         // Calculate start time (null if not needed)
@@ -203,7 +203,7 @@ public sealed class QuartzScheduleConverter : IQuartzScheduleConverter
         if (startTimeResult is not ParseResult<DateTimeOffset?>.Success startSuccess)
         {
             var error = (ParseResult<DateTimeOffset?>.Error)startTimeResult;
-            return new ParseResult<TriggerBuilder>.Error(error.Message);
+            return new ParseResult<TriggerBuilder>.Error(error.Message, error.Exception);
         }
 
         // Create TriggerBuilder with schedule and optional start time
@@ -233,7 +233,7 @@ public sealed class QuartzScheduleConverter : IQuartzScheduleConverter
         if (scheduleResult is not ParseResult<IScheduleBuilder>.Success scheduleSuccess)
         {
             var error = (ParseResult<IScheduleBuilder>.Error)scheduleResult;
-            return new ParseResult<TriggerBuilder>.Error(error.Message);
+            return new ParseResult<TriggerBuilder>.Error(error.Message, error.Exception);
         }
 
         // Calculate start time (null if not needed)
@@ -241,7 +241,7 @@ public sealed class QuartzScheduleConverter : IQuartzScheduleConverter
         if (startTimeResult is not ParseResult<DateTimeOffset?>.Success startSuccess)
         {
             var error = (ParseResult<DateTimeOffset?>.Error)startTimeResult;
-            return new ParseResult<TriggerBuilder>.Error(error.Message);
+            return new ParseResult<TriggerBuilder>.Error(error.Message, error.Exception);
         }
 
         // Create TriggerBuilder with schedule and optional start time
@@ -268,7 +268,7 @@ public sealed class QuartzScheduleConverter : IQuartzScheduleConverter
         if (futureTimeResult is not ParseResult<DateTimeOffset>.Success success)
         {
             var error = (ParseResult<DateTimeOffset>.Error)futureTimeResult;
-            return new ParseResult<TriggerBuilder>.Error(error.Message);
+            return new ParseResult<TriggerBuilder>.Error(error.Message, error.Exception);
         }
 
         var scheduleBuilder = MisfireInstructionHelper.ApplyMisfireInstruction(
