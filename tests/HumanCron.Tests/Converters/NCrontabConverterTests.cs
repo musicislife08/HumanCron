@@ -431,6 +431,22 @@ public class NCrontabConverterTests
 
     #endregion
 
+    #region ScheduleParserOptions Overload
+
+    [Test]
+    public void ToNCrontab_ScheduleParserOptionsOverload_EnforcesMinIntervalFloor()
+    {
+        var options = new ScheduleParserOptions { MinInterval = TimeSpan.FromMinutes(15) };
+
+        var tooFast = _converter.ToNCrontab("every 5 minutes", options);
+        var atFloor = _converter.ToNCrontab("every 15 minutes", options);
+
+        Assert.That(tooFast, Is.TypeOf<ParseResult<string>.Error>());
+        Assert.That(atFloor, Is.TypeOf<ParseResult<string>.Success>());
+    }
+
+    #endregion
+
     #region Bidirectional Conversion
 
     [TestCase("every 30 seconds")]

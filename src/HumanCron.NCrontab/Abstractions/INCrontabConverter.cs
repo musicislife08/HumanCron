@@ -1,4 +1,5 @@
 using HumanCron.Models;
+using HumanCron.Parsing;
 using NodaTime;
 
 namespace HumanCron.NCrontab.Abstractions;
@@ -26,6 +27,19 @@ public interface INCrontabConverter
     /// <param name="userTimezone">User's timezone for interpreting times (null = use system timezone)</param>
     /// <returns>ParseResult containing NCrontab expression or error</returns>
     ParseResult<string> ToNCrontab(string naturalLanguage, DateTimeZone? userTimezone);
+
+    /// <summary>
+    /// Convert natural language to NCrontab expression, with full parser options
+    /// (timezone and/or a MinInterval floor)
+    /// </summary>
+    /// <param name="naturalLanguage">Natural language schedule</param>
+    /// <param name="options">
+    /// Parser options. Unlike the DateTimeZone? overload, options.TimeZone is used exactly
+    /// as given (default = system timezone) - there is no per-converter local-timezone
+    /// fallback once you pass this object yourself.
+    /// </param>
+    /// <returns>ParseResult containing NCrontab expression, or an Error if MinInterval is set and violated</returns>
+    ParseResult<string> ToNCrontab(string naturalLanguage, ScheduleParserOptions options);
 
     /// <summary>
     /// Convert NCrontab expression to natural language
