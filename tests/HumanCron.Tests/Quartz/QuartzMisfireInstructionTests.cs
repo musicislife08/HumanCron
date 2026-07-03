@@ -474,6 +474,27 @@ public class QuartzMisfireInstructionTests
     }
 
     [Test]
+    public void CreateTriggerBuilder_WithInvalidMisfireValue_PropagatesException()
+    {
+        // Arrange
+        var natural = "every day at 2pm";
+        var invalidMisfire = 999; // Invalid value
+
+        // Act
+        var result = _converter.CreateTriggerBuilder(natural, invalidMisfire);
+
+        // Assert - CreateTriggerBuilder now propagates the original Exception
+        // from the underlying ToQuartzSchedule error remap, not just the
+        // clean Message, proving the fix reaches this public entry point.
+        Assert.That(result, Is.TypeOf<ParseResult<TriggerBuilder>.Error>());
+        var error = (ParseResult<TriggerBuilder>.Error)result;
+        Assert.That(error.Message, Does.Contain("Quartz schedule").IgnoreCase);
+        Assert.That(error.Exception, Is.Not.Null);
+        Assert.That(error.Exception!.Message, Does.Contain("misfire").IgnoreCase);
+        Assert.That(error.Exception!.Message, Does.Contain("999"));
+    }
+
+    [Test]
     public void ToQuartzSchedule_ComplexScheduleWithMisfire_WorksCorrectly()
     {
         // Arrange - Complex schedule with day-of-week constraint and misfire
