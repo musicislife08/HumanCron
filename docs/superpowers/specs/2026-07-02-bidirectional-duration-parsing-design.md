@@ -110,7 +110,12 @@ ParseResult<string> ToNaturalDuration(
     never needs to invent DST logic or throw on the edge cases.
   - **This distinction only matters when the duration includes month/year components.** For
     fixed-unit-only durations (hours/minutes/seconds/days/weeks), Mode 1 and Mode 2 always
-    produce the identical instant — there's no calendar ambiguity to resolve.
+    produce the identical instant — there's no calendar ambiguity to resolve. This requires the
+    implementation to split a parsed `Period` into its calendar part (Years/Months, navigated
+    via `LocalDateTime.Plus`) and its fixed part (Weeks/Days/Hours/Minutes/Seconds/Milliseconds,
+    added as a physical `Duration`) and add them separately — adding the *whole* period through
+    `LocalDateTime.Plus` in one step would make even a plain `"90 minutes"` sensitive to DST
+    whenever the addition straddles a transition, which breaks the guarantee above.
 - Months/years are fully supported here (unlike Layer 1) because the anchor makes calendar
   math well-defined. Month-end rollover follows NodaTime's own `Period`/`LocalDateTime`
   semantics (`Jan 31` + 1 month → `Feb 28`/`Feb 29`, matching `DateTime.AddMonths`-style
