@@ -336,6 +336,27 @@ public class HumanDurationConverterTests
     }
 
     [Test]
+    public void ToNaturalDuration_PreciseMode_NegativeMixedCalendarAndPhysicalAcrossDst_RoundTripsExactly()
+    {
+        var newYork = DateTimeZoneProviders.Tzdb["America/New_York"];
+        // Anchor is after spring-forward within the same day (post-transition, unambiguous EDT)
+        var anchor = new DateTimeOffset(2026, 4, 8, 3, 30, 0, TimeSpan.FromHours(-4));
+
+        var futureResult = _converter.ToFutureTime("-1 month 3 days", anchor, newYork);
+        Assert.That(futureResult, Is.TypeOf<ParseResult<DateTimeOffset>.Success>());
+        var target = ((ParseResult<DateTimeOffset>.Success)futureResult).Value;
+
+        // Verified expected forward result: 2026-03-05T02:30:00-05:00 (the backward calendar
+        // step lands on 2026-03-08T03:30 EDT, still post-transition; subtracting 3 more physical
+        // days from there crosses back over the spring-forward boundary into EST).
+        Assert.That(target, Is.EqualTo(new DateTimeOffset(2026, 3, 5, 2, 30, 0, TimeSpan.FromHours(-5))));
+
+        var naturalResult = _converter.ToNaturalDuration(target, anchor, newYork);
+        Assert.That(naturalResult, Is.TypeOf<ParseResult<string>.Success>());
+        Assert.That(((ParseResult<string>.Success)naturalResult).Value, Is.EqualTo("-1 month 3 days"));
+    }
+
+    [Test]
     public void ToNaturalDuration_NullAnchor_UsesInjectedClock()
     {
         var fakeClock = new FakeClock(Instant.FromUtc(2026, 6, 1, 12, 0, 0));
