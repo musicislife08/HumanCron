@@ -88,10 +88,10 @@ internal static class MisfireInstructionHelper
             0 => builder, // SmartPolicy - don't call any method, use Quartz default
             -1 => builder.WithMisfireHandlingInstructionIgnoreMisfires(), // IgnoreMisfirePolicy
             1 => builder.WithMisfireHandlingInstructionFireNow(), // SimpleTrigger.FireNow
-            2 => builder.WithMisfireHandlingInstructionNextWithRemainingCount(),
-            3 => builder.WithMisfireHandlingInstructionNextWithExistingCount(),
-            4 => builder.WithMisfireHandlingInstructionNowWithRemainingCount(),
-            5 => builder.WithMisfireHandlingInstructionNowWithExistingCount(),
+            2 => builder.WithMisfireHandlingInstructionNowWithExistingCount(), // RescheduleNowWithExistingRepeatCount
+            3 => builder.WithMisfireHandlingInstructionNowWithRemainingCount(), // RescheduleNowWithRemainingRepeatCount
+            4 => builder.WithMisfireHandlingInstructionNextWithRemainingCount(), // RescheduleNextWithRemainingCount
+            5 => builder.WithMisfireHandlingInstructionNextWithExistingCount(), // RescheduleNextWithExistingCount
             _ => throw new ArgumentOutOfRangeException(
                 nameof(misfireInstruction),
                 misfireInstruction,
