@@ -185,6 +185,53 @@ if (triggerResult is ParseResult<TriggerBuilder>.Success triggerSuccess)
 }
 ```
 
+### Duration Parsing
+
+```csharp
+using HumanCron.Converters.Duration;
+
+var converter = HumanDurationConverter.Create();
+
+// Pure duration: natural language <-> TimeSpan (no anchor, no calendar units)
+var parsed = converter.ParseDuration("1 day 2 hours 30 minutes");
+// ParseResult<TimeSpan>.Success(...)
+
+var formatted = converter.FormatDuration(TimeSpan.FromMinutes(150));
+// "2 hours 30 minutes"
+
+// Anchored math: natural language duration -> DateTimeOffset, and back again
+var futureResult = converter.ToFutureTime("2 hours");
+// ParseResult<DateTimeOffset>.Success(now + 2 hours)
+
+var naturalResult = converter.ToNaturalDuration(unfreezeAt, syncCompletedAt);
+// ParseResult<string>.Success("2 hours")
+```
+
+Month/year durations need an explicit `DateTimeZone` for DST-correct math - see the
+[Integration Guide](src/HumanCron/INTEGRATION.md#duration-parsing-bidirectional) for the
+naive-vs-precise mode distinction and the Quartz one-time-trigger helper.
+
+### Minimum Interval Floor (MinInterval)
+
+```csharp
+using HumanCron.Converters.Unix;
+using HumanCron.Parsing;
+
+var converter = UnixCronConverter.Create();
+var options = new ScheduleParserOptions { MinInterval = TimeSpan.FromMinutes(15) };
+
+var tooFast = converter.ToCron("every 5 minutes", options);
+// ParseResult<string>.Error - "every 5 minutes" is tighter than the 15-minute floor
+
+var atFloor = converter.ToCron("every 15 minutes", options);
+// ParseResult<string>.Success("*/15 * * * *") - exactly at the floor is allowed (inclusive)
+```
+
+Available on all three converters (`IHumanCronConverter`, `INCrontabConverter`,
+`IQuartzScheduleConverter`) via the `ScheduleParserOptions` overload - see the
+[Integration Guide](src/HumanCron/INTEGRATION.md#rejecting-schedules-that-fire-too-often-mininterval)
+for details.
+
 ## Supported Syntax
 
 ### Basic Intervals
