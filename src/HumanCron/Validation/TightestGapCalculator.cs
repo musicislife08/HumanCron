@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using HumanCron.Models.Internal;
 
 namespace HumanCron.Validation;
@@ -14,6 +15,26 @@ internal static class TightestGapCalculator
 {
     internal static TimeSpan Calculate(ScheduleSpec spec)
     {
+        if (spec.MinuteList is { Count: > 0 } minuteList)
+        {
+            return MinuteListGap(minuteList);
+        }
+
+        if (spec.MinuteStart.HasValue)
+        {
+            return TimeSpan.FromMinutes(spec.MinuteStep ?? 1);
+        }
+
+        if (spec.HourList is { Count: > 0 } hourList)
+        {
+            return HourListGap(hourList);
+        }
+
+        if (spec.HourStart.HasValue)
+        {
+            return TimeSpan.FromHours(spec.HourStep ?? 1);
+        }
+
         if (IsAtMostDaily(spec))
         {
             return TimeSpan.FromHours(24);
@@ -51,4 +72,22 @@ internal static class TightestGapCalculator
         IntervalUnit.Years => TimeSpan.FromDays(interval * 365),
         _ => throw new ArgumentOutOfRangeException(nameof(unit), unit, "Unknown interval unit"),
     };
+
+    private static TimeSpan MinuteListGap(IReadOnlyList<int> sortedMinutes) =>
+        TimeSpan.FromMinutes(sortedMinutes.Count == 1 ? 60 : CyclicMinGap(sortedMinutes, 60));
+
+    private static TimeSpan HourListGap(IReadOnlyList<int> sortedHours) =>
+        TimeSpan.FromHours(sortedHours.Count == 1 ? 24 : CyclicMinGap(sortedHours, 24));
+
+    // sortedValues must already be sorted ascending (ParseListNotation guarantees this).
+    private static int CyclicMinGap(IReadOnlyList<int> sortedValues, int cycleLength)
+    {
+        var minGap = cycleLength - sortedValues[^1] + sortedValues[0]; // wraparound baseline
+        for (var i = 1; i < sortedValues.Count; i++)
+        {
+            minGap = Math.Min(minGap, sortedValues[i] - sortedValues[i - 1]);
+        }
+
+        return minGap;
+    }
 }
