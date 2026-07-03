@@ -49,3 +49,6 @@ appsettings.*.local.json
 **/*.pfx
 **/*.p12
 **/*.key
+
+# Superpowers scratch state (progress ledgers, etc.)
+.superpowers/
