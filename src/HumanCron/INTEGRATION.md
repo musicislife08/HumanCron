@@ -653,10 +653,53 @@ public interface IQuartzScheduleBuilder
 ### ScheduleParserOptions
 
 ```csharp
-public sealed class ScheduleParserOptions
+public sealed record ScheduleParserOptions
 {
-    public TimeZoneInfo TimeZone { get; set; } = TimeZoneInfo.Utc;
+    // Default: Local system timezone (via DateTimeZoneProviders.Tzdb.GetSystemDefault())
+    // Note: Default is evaluated at instance creation time
+    public DateTimeZone TimeZone { get; init; } = DateTimeZoneProviders.Tzdb.GetSystemDefault();
+
+    // Optional floor on the tightest allowed gap between consecutive firings.
+    // Null (default) = no floor, matching pre-v0.5 behavior.
+    // Inclusive boundary: a schedule is valid when its tightest gap is >= MinInterval.
+    public TimeSpan? MinInterval { get; init; }
 }
+```
+
+**Note**: `TimeZone` uses NodaTime's `DateTimeZone`, not the BCL `TimeZoneInfo`. See [Custom Timezone](#custom-timezone) above.
+
+### Options-Taking Converter Overloads
+
+All three converters (`IHumanCronConverter`, `INCrontabConverter`, `IQuartzScheduleConverter`) expose an overload
+that accepts `ScheduleParserOptions` directly, giving you both timezone control and the `MinInterval` floor in a
+single call:
+
+```csharp
+ParseResult<string> IHumanCronConverter.ToCron(string naturalLanguage, ScheduleParserOptions options);
+
+ParseResult<string> INCrontabConverter.ToNCrontab(string naturalLanguage, ScheduleParserOptions options);
+
+ParseResult<IScheduleBuilder> IQuartzScheduleConverter.ToQuartzSchedule(
+    string naturalLanguage, ScheduleParserOptions options, int misfireInstruction = 0);
+
+ParseResult<TriggerBuilder> IQuartzScheduleConverter.CreateTriggerBuilder(
+    string naturalLanguage, ScheduleParserOptions options, int misfireInstruction = 0);
+```
+
+Unlike the `DateTimeZone?` overloads, `options.TimeZone` is used exactly as given (default = system timezone) -
+there is no per-converter local-timezone fallback once you pass this object yourself, matching System.Text.Json's
+`JsonSerializerOptions`. Reuse a shared instance across calls rather than constructing one per request.
+
+#### Rejecting Schedules That Fire Too Often (MinInterval)
+
+```csharp
+var options = new ScheduleParserOptions { MinInterval = TimeSpan.FromMinutes(15) };
+
+var tooFast = converter.ToCron("every 5 minutes", options);
+// ParseResult<string>.Error - "every 5 minutes" is tighter than the 15-minute floor
+
+var atFloor = converter.ToCron("every 15 minutes", options);
+// ParseResult<string>.Success("*/15 * * * *") - exactly at the floor is allowed (inclusive)
 ```
 
 ### ParseResult<T>

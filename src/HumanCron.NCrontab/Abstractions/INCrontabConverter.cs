@@ -36,9 +36,16 @@ public interface INCrontabConverter
     /// <param name="options">
     /// Parser options. Unlike the DateTimeZone? overload, options.TimeZone is used exactly
     /// as given (default = system timezone) - there is no per-converter local-timezone
-    /// fallback once you pass this object yourself.
+    /// fallback once you pass this object yourself, matching System.Text.Json's
+    /// JsonSerializerOptions.
     /// </param>
     /// <returns>ParseResult containing NCrontab expression, or an Error if MinInterval is set and violated</returns>
+    /// <example>
+    /// <code>
+    /// var options = new ScheduleParserOptions { MinInterval = TimeSpan.FromMinutes(15) };
+    /// var result = converter.ToNCrontab("every 5 seconds", options); // Error: runs more often than 15 minutes
+    /// </code>
+    /// </example>
     ParseResult<string> ToNCrontab(string naturalLanguage, ScheduleParserOptions options);
 
     /// <summary>
