@@ -9,20 +9,16 @@ public class TightestGapCalculatorTests
     private static ScheduleSpec PlainInterval(int interval, IntervalUnit unit) =>
         new() { Interval = interval, Unit = unit };
 
-    [TestCase(0, 30)]
-    [TestCase(1, 15 * 60)]
-    [TestCase(2, 6 * 3600)]
-    [TestCase(3, 24 * 3600)]
-    [TestCase(4, 2 * 7 * 24 * 3600)]
-    [TestCase(5, 3 * 28 * 24 * 3600)]
-    [TestCase(6, 365 * 24 * 3600)]
-    public void Calculate_PlainInterval_ReturnsIntervalTimesUnitLength(int unitIndex, int expectedSeconds)
+    [TestCase(30, (int)IntervalUnit.Seconds, 30)]
+    [TestCase(15, (int)IntervalUnit.Minutes, 15 * 60)]
+    [TestCase(6, (int)IntervalUnit.Hours, 6 * 3600)]
+    [TestCase(1, (int)IntervalUnit.Days, 24 * 3600)]
+    [TestCase(2, (int)IntervalUnit.Weeks, 2 * 7 * 24 * 3600)]
+    [TestCase(3, (int)IntervalUnit.Months, 3 * 28 * 24 * 3600)]
+    [TestCase(1, (int)IntervalUnit.Years, 365 * 24 * 3600)]
+    public void Calculate_PlainInterval_ReturnsIntervalTimesUnitLength(int interval, int unitValue, int expectedSeconds)
     {
-        var units = new[] { IntervalUnit.Seconds, IntervalUnit.Minutes, IntervalUnit.Hours, IntervalUnit.Days, IntervalUnit.Weeks, IntervalUnit.Months, IntervalUnit.Years };
-        var intervals = new[] { 30, 15, 6, 1, 2, 3, 1 };
-        var unit = units[unitIndex];
-        var interval = intervals[unitIndex];
-
+        var unit = (IntervalUnit)unitValue;
         var spec = PlainInterval(interval, unit);
 
         var gap = TightestGapCalculator.Calculate(spec);
@@ -66,6 +62,16 @@ public class TightestGapCalculatorTests
     public void Calculate_LastDayOfMonth_ReturnsFlat24Hours()
     {
         var spec = new ScheduleSpec { Interval = 1, Unit = IntervalUnit.Months, IsLastDay = true };
+
+        var gap = TightestGapCalculator.Calculate(spec);
+
+        Assert.That(gap, Is.EqualTo(TimeSpan.FromHours(24)));
+    }
+
+    [Test]
+    public void Calculate_LastDayOffset_ReturnsFlat24Hours()
+    {
+        var spec = new ScheduleSpec { Interval = 1, Unit = IntervalUnit.Months, LastDayOffset = 3 };
 
         var gap = TightestGapCalculator.Calculate(spec);
 

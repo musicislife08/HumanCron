@@ -35,7 +35,8 @@ internal static class TightestGapCalculator
         || spec.IsNearestWeekday
         || spec.NthOccurrence.HasValue
         || spec.DayList is { Count: > 0 }
-        || spec.DayStart.HasValue;
+        || spec.DayStart.HasValue
+        || spec.LastDayOffset.HasValue;
 
     private static TimeSpan PlainIntervalGap(int interval, IntervalUnit unit) => unit switch
     {
