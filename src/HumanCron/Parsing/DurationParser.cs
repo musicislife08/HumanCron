@@ -95,41 +95,51 @@ internal static partial class DurationParser
     private static string? AddToBuilder(PeriodBuilder builder, string rawUnit, long value)
     {
         var unit = CanonicalUnit(rawUnit);
-        switch (unit)
+        try
         {
-            case "ms":
-                builder.Milliseconds += value;
-                return null;
-            case "s":
-                builder.Seconds += value;
-                return null;
-            case "m":
-                builder.Minutes += value;
-                return null;
-            case "h":
-                builder.Hours += value;
-                return null;
-            case "d":
-            case "w":
-            case "M":
-            case "y":
-                if (value > int.MaxValue)
-                {
-                    return $"Duration value too large: {value}. Maximum is {int.MaxValue}.";
-                }
-
-                var intValue = (int)value;
+            checked
+            {
                 switch (unit)
                 {
-                    case "d": builder.Days += intValue; break;
-                    case "w": builder.Weeks += intValue; break;
-                    case "M": builder.Months += intValue; break;
-                    case "y": builder.Years += intValue; break;
-                }
+                    case "ms":
+                        builder.Milliseconds += value;
+                        return null;
+                    case "s":
+                        builder.Seconds += value;
+                        return null;
+                    case "m":
+                        builder.Minutes += value;
+                        return null;
+                    case "h":
+                        builder.Hours += value;
+                        return null;
+                    case "d":
+                    case "w":
+                    case "M":
+                    case "y":
+                        if (value > int.MaxValue)
+                        {
+                            return $"Duration value too large: {value}. Maximum is {int.MaxValue}.";
+                        }
 
-                return null;
-            default:
-                throw new InvalidOperationException($"Unknown duration unit: {rawUnit}");
+                        var intValue = (int)value;
+                        switch (unit)
+                        {
+                            case "d": builder.Days += intValue; break;
+                            case "w": builder.Weeks += intValue; break;
+                            case "M": builder.Months += intValue; break;
+                            case "y": builder.Years += intValue; break;
+                        }
+
+                        return null;
+                    default:
+                        throw new InvalidOperationException($"Unknown duration unit: {rawUnit}");
+                }
+            }
+        }
+        catch (OverflowException)
+        {
+            return $"Duration value too large: the accumulated total for repeated '{rawUnit}' units overflows.";
         }
     }
 

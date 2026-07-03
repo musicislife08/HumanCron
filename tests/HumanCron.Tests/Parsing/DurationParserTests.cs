@@ -182,4 +182,22 @@ public class DurationParserTests
         var period = ((ParseResult<Period>.Success)result).Value;
         Assert.That(period.Hours, Is.EqualTo(99999999999L));
     }
+
+    [Test]
+    public void Parse_RepeatedDateUnitSumOverflowsInt_ReturnsError()
+    {
+        // Each token individually passes the int.MaxValue check, but the sum overflows int.
+        var result = DurationParser.Parse("2000000000 days 2000000000 days");
+
+        Assert.That(result, Is.TypeOf<ParseResult<Period>.Error>());
+    }
+
+    [Test]
+    public void Parse_RepeatedTimeUnitSumOverflowsLong_ReturnsError()
+    {
+        // Each token individually is a valid long, but the sum overflows long.
+        var result = DurationParser.Parse("9223372036854775000 seconds 9223372036854775000 seconds");
+
+        Assert.That(result, Is.TypeOf<ParseResult<Period>.Error>());
+    }
 }

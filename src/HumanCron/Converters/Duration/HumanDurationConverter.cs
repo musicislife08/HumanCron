@@ -35,15 +35,7 @@ public sealed class HumanDurationConverter : IHumanDurationConverter
     /// <inheritdoc/>
     public ParseResult<TimeSpan> ParseDuration(string duration)
     {
-        duration ??= "";
-
-        if (duration.Length > MaxInputLength)
-        {
-            return new ParseResult<TimeSpan>.Error(
-                $"Duration input exceeds maximum length of {MaxInputLength} characters");
-        }
-
-        var parseResult = DurationParser.Parse(duration);
+        var parseResult = ParsePeriod(duration);
         if (parseResult is not ParseResult<Period>.Success success)
         {
             var error = (ParseResult<Period>.Error)parseResult;
@@ -74,15 +66,7 @@ public sealed class HumanDurationConverter : IHumanDurationConverter
         DateTimeOffset? anchor = null,
         DateTimeZone? timeZone = null)
     {
-        duration ??= "";
-
-        if (duration.Length > MaxInputLength)
-        {
-            return new ParseResult<DateTimeOffset>.Error(
-                $"Duration input exceeds maximum length of {MaxInputLength} characters");
-        }
-
-        var parseResult = DurationParser.Parse(duration);
+        var parseResult = ParsePeriod(duration);
         if (parseResult is not ParseResult<Period>.Success success)
         {
             var error = (ParseResult<Period>.Error)parseResult;
@@ -112,6 +96,19 @@ public sealed class HumanDurationConverter : IHumanDurationConverter
             : PeriodBetweenPrecise(anchorValue, target, timeZone);
 
         return new ParseResult<string>.Success(DurationFormatter.Format(period));
+    }
+
+    private static ParseResult<Period> ParsePeriod(string duration)
+    {
+        duration ??= "";
+
+        if (duration.Length > MaxInputLength)
+        {
+            return new ParseResult<Period>.Error(
+                $"Duration input exceeds maximum length of {MaxInputLength} characters");
+        }
+
+        return DurationParser.Parse(duration);
     }
 
     // Splits a Period into its calendar component (Years/Months - navigated via LocalDateTime,

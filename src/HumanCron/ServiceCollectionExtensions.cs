@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using HumanCron.Abstractions;
+using HumanCron.Converters.Duration;
 using HumanCron.Converters.Unix;
 using HumanCron.Formatting;
 using HumanCron.Parsing;
@@ -83,6 +84,9 @@ public static class ServiceCollectionExtensions
 
             // Register Unix cron converter using factory method (handles IClock and DateTimeZone dependencies)
             services.AddTransient<IHumanCronConverter>(_ => UnixCronConverter.Create());
+
+            // Register duration converter using factory method (handles IClock dependency)
+            services.AddTransient<IHumanDurationConverter>(_ => HumanDurationConverter.Create());
 
             // Auto-discover and register extension services (Quartz, Hangfire, etc.)
             RegisterExtensionServices(services);
