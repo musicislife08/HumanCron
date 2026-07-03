@@ -115,7 +115,7 @@ public sealed class UnixCronConverter : IHumanCronConverter
         var parseResult = _parser.Parse(naturalLanguage, options);
         if (parseResult is ParseResult<ScheduleSpec>.Error parseError)
         {
-            return new ParseResult<string>.Error($"Failed to parse natural language: {parseError.Message}");
+            return new ParseResult<string>.Error(parseError.Message);
         }
 
         var spec = ((ParseResult<ScheduleSpec>.Success)parseResult).Value;
