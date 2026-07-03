@@ -730,6 +730,12 @@ cheap, but can be off by up to an hour across a DST boundary. Passing an explici
 resolves the correct offset via NodaTime. This distinction only matters for month/year
 durations; fixed-unit durations (hours/minutes/seconds/days/weeks) are unaffected either way.
 
+One asymmetry to be aware of: `ToFutureTime` always adds days/weeks as a fixed physical span
+(24h/7d), but `ToNaturalDuration`'s reverse diff reports elapsed days calendar-wise. Round-tripping
+a day/week duration through both calls with an explicit `timeZone` across a DST boundary can
+therefore report an extra/missing hour (e.g. `"1 day"` coming back as `"1 day 1 hour"`) - this
+isn't a bug, just a consequence of addition being physical while diffing is calendar-aware.
+
 Accepted unit vocabulary: full words (`second(s)` ... `year(s)`, including `millisecond(s)`,
 which has no schedule-side equivalent) and abbreviations `ms`, `s`, `m` (minutes), `h`, `d`,
 `w`, `M` (months), `y`. Compound durations are space-separated: `"1d 2h 30m"`. A leading `-`,
