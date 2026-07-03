@@ -45,7 +45,7 @@ public sealed class QuartzScheduleConverter : IQuartzScheduleConverter
         string naturalLanguage,
         int misfireInstruction = 0)
     {
-        return ToQuartzSchedule(naturalLanguage, null, misfireInstruction);
+        return ToQuartzSchedule(naturalLanguage, (DateTimeZone?)null, misfireInstruction);
     }
 
     /// <summary>
@@ -74,6 +74,20 @@ public sealed class QuartzScheduleConverter : IQuartzScheduleConverter
         DateTimeZone? userTimezone,
         int misfireInstruction = 0)
     {
+        return ToQuartzSchedule(
+            naturalLanguage,
+            new Parsing.ScheduleParserOptions { TimeZone = userTimezone ?? _localTimeZone },
+            misfireInstruction);
+    }
+
+    /// <inheritdoc/>
+    public ParseResult<IScheduleBuilder> ToQuartzSchedule(
+        string naturalLanguage,
+        Parsing.ScheduleParserOptions options,
+        int misfireInstruction = 0)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+
         if (string.IsNullOrWhiteSpace(naturalLanguage))
         {
             return new ParseResult<IScheduleBuilder>.Error("Natural language input cannot be empty");
@@ -84,12 +98,6 @@ public sealed class QuartzScheduleConverter : IQuartzScheduleConverter
             return new ParseResult<IScheduleBuilder>.Error(
                 $"Natural language input exceeds maximum length of {MaxInputLength} characters");
         }
-
-        // Use provided timezone or default to server's local timezone
-        var options = new Parsing.ScheduleParserOptions
-        {
-            TimeZone = userTimezone ?? _localTimeZone
-        };
 
         // Step 1: Parse natural language to ScheduleSpec
         var parseResult = _parser.Parse(naturalLanguage, options);
@@ -151,11 +159,17 @@ public sealed class QuartzScheduleConverter : IQuartzScheduleConverter
         DateTimeOffset? referenceTime = null,
         DateTimeZone? userTimezone = null)
     {
-        var options = new Parsing.ScheduleParserOptions
-        {
-            TimeZone = userTimezone ?? _localTimeZone
-        };
+        return CalculateStartTime(
+            naturalLanguage,
+            new Parsing.ScheduleParserOptions { TimeZone = userTimezone ?? _localTimeZone },
+            referenceTime);
+    }
 
+    internal ParseResult<DateTimeOffset?> CalculateStartTime(
+        string naturalLanguage,
+        Parsing.ScheduleParserOptions options,
+        DateTimeOffset? referenceTime = null)
+    {
         var parseResult = _parser.Parse(naturalLanguage, options);
         if (parseResult is not ParseResult<ScheduleSpec>.Success success)
         {
@@ -183,6 +197,44 @@ public sealed class QuartzScheduleConverter : IQuartzScheduleConverter
 
         // Calculate start time (null if not needed)
         var startTimeResult = CalculateStartTime(naturalLanguage);
+        if (startTimeResult is not ParseResult<DateTimeOffset?>.Success startSuccess)
+        {
+            var error = (ParseResult<DateTimeOffset?>.Error)startTimeResult;
+            return new ParseResult<TriggerBuilder>.Error(error.Message);
+        }
+
+        // Create TriggerBuilder with schedule and optional start time
+        var triggerBuilder = TriggerBuilder.Create()
+            .WithSchedule(scheduleSuccess.Value);
+
+        // Set start time if calculated (for CalendarInterval schedules with constraints)
+        if (!startSuccess.Value.HasValue) return new ParseResult<TriggerBuilder>.Success(triggerBuilder);
+        // Explicitly convert to UTC to ensure Quartz interprets it correctly
+        var startTimeUtc = startSuccess.Value.Value.ToUniversalTime();
+        triggerBuilder.StartAt(startTimeUtc);
+
+        return new ParseResult<TriggerBuilder>.Success(triggerBuilder);
+    }
+
+    /// <inheritdoc/>
+    public ParseResult<TriggerBuilder> CreateTriggerBuilder(
+        string naturalLanguage,
+        Parsing.ScheduleParserOptions options,
+        int misfireInstruction = 0)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+
+        // Get the schedule builder with misfire instruction applied
+        // (ToQuartzSchedule validates input - null/empty/length checks)
+        var scheduleResult = ToQuartzSchedule(naturalLanguage, options, misfireInstruction);
+        if (scheduleResult is not ParseResult<IScheduleBuilder>.Success scheduleSuccess)
+        {
+            var error = (ParseResult<IScheduleBuilder>.Error)scheduleResult;
+            return new ParseResult<TriggerBuilder>.Error(error.Message);
+        }
+
+        // Calculate start time (null if not needed)
+        var startTimeResult = CalculateStartTime(naturalLanguage, options);
         if (startTimeResult is not ParseResult<DateTimeOffset?>.Success startSuccess)
         {
             var error = (ParseResult<DateTimeOffset?>.Error)startTimeResult;

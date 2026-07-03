@@ -1,4 +1,5 @@
 using HumanCron.Models;
+using HumanCron.Parsing;
 using HumanCron.Quartz;
 using HumanCron.Quartz.Abstractions;
 using HumanCron.Quartz.Converters;
@@ -389,4 +390,26 @@ public class QuartzScheduleConverterTests
     }
 
     #endregion
+
+    [Test]
+    public void ToQuartzSchedule_ScheduleParserOptionsOverload_EnforcesMinIntervalFloor()
+    {
+        var options = new ScheduleParserOptions { MinInterval = TimeSpan.FromMinutes(15) };
+
+        var tooFast = _converter.ToQuartzSchedule("every 5 minutes", options);
+        var atFloor = _converter.ToQuartzSchedule("every 15 minutes", options);
+
+        Assert.That(tooFast, Is.TypeOf<ParseResult<IScheduleBuilder>.Error>());
+        Assert.That(atFloor, Is.TypeOf<ParseResult<IScheduleBuilder>.Success>());
+    }
+
+    [Test]
+    public void CreateTriggerBuilder_ScheduleParserOptionsOverload_EnforcesMinIntervalFloor()
+    {
+        var options = new ScheduleParserOptions { MinInterval = TimeSpan.FromMinutes(15) };
+
+        var result = _converter.CreateTriggerBuilder("every 5 minutes", options);
+
+        Assert.That(result, Is.TypeOf<ParseResult<TriggerBuilder>.Error>());
+    }
 }
