@@ -231,8 +231,8 @@ namespace HumanCron.Quartz.Abstractions;
 /// Handles both simple patterns (CronScheduleBuilder) and complex patterns (CalendarIntervalScheduleBuilder).
 ///
 /// Examples:
-/// - "every day at 2pm" → CronScheduleBuilder.DailyAtHourAndMinute(14, 0)
-/// - "every 2 weeks on sunday at 3am" → CalendarIntervalScheduleBuilder.Create().WithIntervalInWeeks(2)...
+/// - "every day at 2pm" → CronScheduleBuilder.Create("0 0 14 * * ?")
+/// - "every 2 weeks on sunday at 3am" → CalendarIntervalScheduleBuilder.Create().WithInterval(2, IntervalUnit.Week)...
 /// - CronScheduleBuilder → "every day at 2pm"
 /// - CalendarIntervalScheduleBuilder → "every 2 weeks on sunday at 3am"
 /// </remarks>

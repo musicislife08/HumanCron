@@ -30,7 +30,7 @@ dotnet add package HumanCron
 # NCrontab 6-field cron support (optional - adds seconds precision)
 dotnet add package HumanCron.NCrontab
 
-# Quartz.NET integration (optional)
+# Quartz.NET integration (optional) - requires Quartz.NET 4.x; Quartz 3 users pin HumanCron.Quartz 0.8.0
 dotnet add package HumanCron.Quartz
 
 # Hangfire integration (optional - includes NCrontab support)
@@ -176,13 +176,17 @@ if (result is ParseResult<IScheduleBuilder>.Success success)
 
 // Multi-week patterns use CalendarIntervalScheduleBuilder
 var triggerResult = converter.CreateTriggerBuilder("every 3 weeks on sunday at 12am");
-if (triggerResult is ParseResult<TriggerBuilder>.Success triggerSuccess)
+if (triggerResult is ParseResult<TriggerBuilder<IJob>>.Success triggerSuccess)
 {
     var trigger = triggerSuccess.Value
         .WithIdentity("my-trigger")
         .ForJob("my-job")
         .Build();
 }
+
+// Misfire policy: pass the Quartz cron-family enum; it is applied to whichever
+// trigger family (cron or calendar-interval) the phrase produces
+var skipMissed = converter.CreateTriggerBuilder("every day at 2pm", CronTriggerMisfireInstruction.DoNothing);
 ```
 
 ### Duration Parsing
