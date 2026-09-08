@@ -163,7 +163,7 @@ public class QuartzScheduleConverterTests
     public void ToNaturalLanguage_CronScheduleBuilder_ReturnsNaturalExpression()
     {
         // Arrange - Create a daily at 2pm cron schedule
-        var cronBuilder = CronScheduleBuilder.DailyAtHourAndMinute(14, 0);
+        var cronBuilder = CronScheduleBuilder.Create("0 0 14 * * ?");
 
         // Act
         var result = _converter.ToNaturalLanguage(cronBuilder);
@@ -411,7 +411,7 @@ public class QuartzScheduleConverterTests
 
         var result = _converter.CreateTriggerBuilder("every 5 minutes", options);
 
-        Assert.That(result, Is.TypeOf<ParseResult<TriggerBuilder>.Error>());
+        Assert.That(result, Is.TypeOf<ParseResult<TriggerBuilder<IJob>>.Error>());
     }
 
     [Test]
@@ -421,8 +421,8 @@ public class QuartzScheduleConverterTests
 
         var result = _converter.CreateTriggerBuilder("every 15 minutes", options);
 
-        Assert.That(result, Is.TypeOf<ParseResult<TriggerBuilder>.Success>());
-        var triggerBuilder = ((ParseResult<TriggerBuilder>.Success)result).Value;
+        Assert.That(result, Is.TypeOf<ParseResult<TriggerBuilder<IJob>>.Success>());
+        var triggerBuilder = ((ParseResult<TriggerBuilder<IJob>>.Success)result).Value;
 
         var trigger = triggerBuilder.Build();
 
@@ -454,8 +454,8 @@ public class QuartzScheduleConverterTests
 
         var result = _converter.CreateOneTimeTriggerBuilder("2 hours", anchor);
 
-        Assert.That(result, Is.TypeOf<ParseResult<TriggerBuilder>.Success>());
-        var success = (ParseResult<TriggerBuilder>.Success)result;
+        Assert.That(result, Is.TypeOf<ParseResult<TriggerBuilder<IJob>>.Success>());
+        var success = (ParseResult<TriggerBuilder<IJob>>.Success)result;
         var trigger = success.Value.WithIdentity("test").Build();
 
         Assert.That(trigger, Is.InstanceOf<ISimpleTrigger>());
@@ -469,8 +469,8 @@ public class QuartzScheduleConverterTests
 
         var result = _converter.CreateOneTimeTriggerBuilder("2 hours", anchor);
 
-        Assert.That(result, Is.TypeOf<ParseResult<TriggerBuilder>.Success>());
-        var success = (ParseResult<TriggerBuilder>.Success)result;
+        Assert.That(result, Is.TypeOf<ParseResult<TriggerBuilder<IJob>>.Success>());
+        var success = (ParseResult<TriggerBuilder<IJob>>.Success)result;
         var trigger = success.Value.WithIdentity("test").Build();
 
         var firstFire = trigger.GetFireTimeAfter(anchor.ToUniversalTime().AddSeconds(-1));
@@ -488,8 +488,8 @@ public class QuartzScheduleConverterTests
 
         var result = _converter.CreateOneTimeTriggerBuilder("1 month", anchor, newYork);
 
-        Assert.That(result, Is.TypeOf<ParseResult<TriggerBuilder>.Success>());
-        var success = (ParseResult<TriggerBuilder>.Success)result;
+        Assert.That(result, Is.TypeOf<ParseResult<TriggerBuilder<IJob>>.Success>());
+        var success = (ParseResult<TriggerBuilder<IJob>>.Success)result;
         var trigger = success.Value.WithIdentity("test").Build();
 
         var expected = new DateTimeOffset(2026, 4, 8, 1, 30, 0, TimeSpan.FromHours(-4));
@@ -502,13 +502,13 @@ public class QuartzScheduleConverterTests
         var anchor = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
 
         var result = _converter.CreateOneTimeTriggerBuilder(
-            "2 hours", anchor, misfireInstruction: MisfireInstruction.IgnoreMisfirePolicy);
+            "2 hours", anchor, misfireInstruction: SimpleTriggerMisfireInstruction.IgnoreMisfires);
 
-        Assert.That(result, Is.TypeOf<ParseResult<TriggerBuilder>.Success>());
-        var success = (ParseResult<TriggerBuilder>.Success)result;
+        Assert.That(result, Is.TypeOf<ParseResult<TriggerBuilder<IJob>>.Success>());
+        var success = (ParseResult<TriggerBuilder<IJob>>.Success)result;
         var trigger = (ISimpleTrigger)success.Value.WithIdentity("test").Build();
 
-        Assert.That(trigger.MisfireInstruction, Is.EqualTo(MisfireInstruction.IgnoreMisfirePolicy));
+        Assert.That(trigger.MisfireInstruction, Is.EqualTo(SimpleTriggerMisfireInstruction.IgnoreMisfires));
     }
 
     [Test]
@@ -516,7 +516,7 @@ public class QuartzScheduleConverterTests
     {
         var result = _converter.CreateOneTimeTriggerBuilder("not a duration");
 
-        Assert.That(result, Is.TypeOf<ParseResult<TriggerBuilder>.Error>());
+        Assert.That(result, Is.TypeOf<ParseResult<TriggerBuilder<IJob>>.Error>());
     }
 
     #endregion

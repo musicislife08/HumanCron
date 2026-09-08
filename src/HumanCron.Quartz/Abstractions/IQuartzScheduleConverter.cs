@@ -14,10 +14,16 @@ namespace HumanCron.Quartz.Abstractions;
 /// Provides string-to-schedule and schedule-to-string conversion for Quartz.NET integration.
 ///
 /// Examples:
-/// - "1d at 2pm" → CronScheduleBuilder.DailyAtHourAndMinute(14, 0)
+/// - "1d at 2pm" → CronScheduleBuilder.Create("0 0 14 * * ?")
 /// - "2w on sunday at 3am" → CalendarIntervalScheduleBuilder with 2-week interval
 /// - CronScheduleBuilder → "1d at 2pm"
 /// - CalendarIntervalScheduleBuilder → "2w on sunday at 3am"
+///
+/// Misfire instructions: recurring schedules take a <see cref="CronTriggerMisfireInstruction"/>.
+/// The caller cannot know whether a given phrase yields a cron trigger or a calendar-interval
+/// trigger, and the two families share the same four policies with identical names and values,
+/// so the value is applied to whichever recurring trigger family results. One-time triggers
+/// always build a simple trigger and take <see cref="SimpleTriggerMisfireInstruction"/> directly.
 /// </remarks>
 public interface IQuartzScheduleConverter
 {
@@ -27,8 +33,8 @@ public interface IQuartzScheduleConverter
     /// </summary>
     /// <param name="naturalLanguage">Natural language schedule (e.g., "2w on sunday at 3am")</param>
     /// <param name="misfireInstruction">
-    /// Quartz misfire instruction constant (default: 0 = SmartPolicy).
-    /// Use constants from Quartz.MisfireInstruction.CronTrigger or Quartz.MisfireInstruction.CalendarIntervalTrigger
+    /// Misfire policy (default: SmartPolicy). Applied to whichever recurring trigger family results;
+    /// a calendar-interval result receives the equivalent <see cref="CalendarIntervalTriggerMisfireInstruction"/>.
     /// </param>
     /// <returns>ParseResult with IScheduleBuilder (CronScheduleBuilder or CalendarIntervalScheduleBuilder)</returns>
     /// <example>
@@ -36,8 +42,8 @@ public interface IQuartzScheduleConverter
     /// // Use default misfire handling (SmartPolicy)
     /// var result = converter.ToQuartzSchedule("1d at 2pm");
     ///
-    /// // Skip missed executions using Quartz constant
-    /// var result = converter.ToQuartzSchedule("1d at 2pm", Quartz.MisfireInstruction.CronTrigger.DoNothing);
+    /// // Skip missed executions
+    /// var result = converter.ToQuartzSchedule("1d at 2pm", CronTriggerMisfireInstruction.DoNothing);
     ///
     /// if (result is ParseResult&lt;IScheduleBuilder&gt;.Success success)
     /// {
@@ -49,7 +55,7 @@ public interface IQuartzScheduleConverter
     /// </example>
     ParseResult<IScheduleBuilder> ToQuartzSchedule(
         string naturalLanguage,
-        int misfireInstruction = 0);
+        CronTriggerMisfireInstruction misfireInstruction = CronTriggerMisfireInstruction.SmartPolicy);
 
     /// <summary>
     /// Convert natural language to Quartz schedule builder, with full parser options
@@ -62,7 +68,9 @@ public interface IQuartzScheduleConverter
     /// fallback once you pass this object yourself, matching System.Text.Json's
     /// JsonSerializerOptions.
     /// </param>
-    /// <param name="misfireInstruction">Quartz misfire instruction constant (default: 0 = SmartPolicy)</param>
+    /// <param name="misfireInstruction">
+    /// Misfire policy (default: SmartPolicy). Applied to whichever recurring trigger family results.
+    /// </param>
     /// <returns>ParseResult with IScheduleBuilder, or an Error if MinInterval is set and violated</returns>
     /// <example>
     /// <code>
@@ -80,7 +88,7 @@ public interface IQuartzScheduleConverter
     ParseResult<IScheduleBuilder> ToQuartzSchedule(
         string naturalLanguage,
         ScheduleParserOptions options,
-        int misfireInstruction = 0);
+        CronTriggerMisfireInstruction misfireInstruction = CronTriggerMisfireInstruction.SmartPolicy);
 
     /// <summary>
     /// Convert Quartz schedule builder back to natural language
@@ -90,7 +98,7 @@ public interface IQuartzScheduleConverter
     /// <returns>ParseResult with natural language schedule string</returns>
     /// <example>
     /// <code>
-    /// var builder = CronScheduleBuilder.DailyAtHourAndMinute(14, 0);
+    /// var builder = CronScheduleBuilder.Create("0 0 14 * * ?");
     /// var result = converter.ToNaturalLanguage(builder);
     /// if (result is ParseResult&lt;string&gt;.Success success)
     /// {
@@ -106,8 +114,7 @@ public interface IQuartzScheduleConverter
     /// </summary>
     /// <param name="naturalLanguage">Natural language schedule (e.g., "3w on sunday at 2pm")</param>
     /// <param name="misfireInstruction">
-    /// Quartz misfire instruction constant (default: 0 = SmartPolicy).
-    /// Use constants from Quartz.MisfireInstruction.CronTrigger or Quartz.MisfireInstruction.CalendarIntervalTrigger
+    /// Misfire policy (default: SmartPolicy). Applied to whichever recurring trigger family results.
     /// </param>
     /// <returns>ParseResult with TriggerBuilder ready for job-specific configuration</returns>
     /// <example>
@@ -115,19 +122,13 @@ public interface IQuartzScheduleConverter
     /// // Use default misfire handling (SmartPolicy)
     /// var result = converter.CreateTriggerBuilder("3w on sunday at 2pm");
     ///
-    /// // Skip missed executions using Quartz constant
-    /// var result = converter.CreateTriggerBuilder(
-    ///     "every day at 2pm",
-    ///     Quartz.MisfireInstruction.CronTrigger.DoNothing
-    /// );
+    /// // Skip missed executions
+    /// var result = converter.CreateTriggerBuilder("every day at 2pm", CronTriggerMisfireInstruction.DoNothing);
     ///
-    /// // Fire all missed runs using Quartz constant
-    /// var result = converter.CreateTriggerBuilder(
-    ///     "every hour",
-    ///     Quartz.MisfireInstruction.IgnoreMisfirePolicy
-    /// );
+    /// // Fire all missed runs
+    /// var result = converter.CreateTriggerBuilder("every hour", CronTriggerMisfireInstruction.IgnoreMisfires);
     ///
-    /// if (result is ParseResult&lt;TriggerBuilder&gt;.Success success)
+    /// if (result is ParseResult&lt;TriggerBuilder&lt;IJob&gt;&gt;.Success success)
     /// {
     ///     var trigger = success.Value
     ///         .WithIdentity("myTrigger", "myGroup")
@@ -136,9 +137,9 @@ public interface IQuartzScheduleConverter
     /// }
     /// </code>
     /// </example>
-    ParseResult<TriggerBuilder> CreateTriggerBuilder(
+    ParseResult<TriggerBuilder<IJob>> CreateTriggerBuilder(
         string naturalLanguage,
-        int misfireInstruction = 0);
+        CronTriggerMisfireInstruction misfireInstruction = CronTriggerMisfireInstruction.SmartPolicy);
 
     /// <summary>
     /// Create a pre-configured TriggerBuilder, with full parser options
@@ -151,14 +152,16 @@ public interface IQuartzScheduleConverter
     /// fallback once you pass this object yourself, matching System.Text.Json's
     /// JsonSerializerOptions.
     /// </param>
-    /// <param name="misfireInstruction">Quartz misfire instruction constant (default: 0 = SmartPolicy)</param>
+    /// <param name="misfireInstruction">
+    /// Misfire policy (default: SmartPolicy). Applied to whichever recurring trigger family results.
+    /// </param>
     /// <returns>ParseResult with TriggerBuilder, or an Error if MinInterval is set and violated</returns>
     /// <example>
     /// <code>
     /// var options = new ScheduleParserOptions { MinInterval = TimeSpan.FromMinutes(15) };
     /// var result = converter.CreateTriggerBuilder("every day at 2pm", options);
     ///
-    /// if (result is ParseResult&lt;TriggerBuilder&gt;.Success success)
+    /// if (result is ParseResult&lt;TriggerBuilder&lt;IJob&gt;&gt;.Success success)
     /// {
     ///     var trigger = success.Value
     ///         .WithIdentity("myTrigger", "myGroup")
@@ -167,10 +170,10 @@ public interface IQuartzScheduleConverter
     /// }
     /// </code>
     /// </example>
-    ParseResult<TriggerBuilder> CreateTriggerBuilder(
+    ParseResult<TriggerBuilder<IJob>> CreateTriggerBuilder(
         string naturalLanguage,
         ScheduleParserOptions options,
-        int misfireInstruction = 0);
+        CronTriggerMisfireInstruction misfireInstruction = CronTriggerMisfireInstruction.SmartPolicy);
 
     /// <summary>
     /// Create a pre-configured one-time TriggerBuilder for a relative duration from an anchor
@@ -183,15 +186,14 @@ public interface IQuartzScheduleConverter
     /// see HumanCron.Abstractions.IHumanDurationConverter.ToFutureTime)
     /// </param>
     /// <param name="misfireInstruction">
-    /// Quartz misfire instruction constant (default: 0 = SmartPolicy).
-    /// Use constants from Quartz.MisfireInstruction.SimpleTrigger
+    /// Simple-trigger misfire policy (default: SmartPolicy). One-time triggers are always simple triggers.
     /// </param>
     /// <returns>ParseResult with TriggerBuilder pre-configured with StartAt and no repeating schedule</returns>
     /// <example>
     /// <code>
     /// // Schedule a one-time job 2 hours from now
     /// var result = converter.CreateOneTimeTriggerBuilder("2 hours");
-    /// if (result is ParseResult&lt;TriggerBuilder&gt;.Success success)
+    /// if (result is ParseResult&lt;TriggerBuilder&lt;IJob&gt;&gt;.Success success)
     /// {
     ///     var trigger = success.Value
     ///         .WithIdentity("unfreezeTrigger", "myGroup")
@@ -200,9 +202,9 @@ public interface IQuartzScheduleConverter
     /// }
     /// </code>
     /// </example>
-    ParseResult<TriggerBuilder> CreateOneTimeTriggerBuilder(
+    ParseResult<TriggerBuilder<IJob>> CreateOneTimeTriggerBuilder(
         string duration,
         DateTimeOffset? anchor = null,
         DateTimeZone? timeZone = null,
-        int misfireInstruction = 0);
+        SimpleTriggerMisfireInstruction misfireInstruction = SimpleTriggerMisfireInstruction.SmartPolicy);
 }

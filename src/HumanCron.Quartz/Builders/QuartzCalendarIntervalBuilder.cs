@@ -3,6 +3,7 @@ using Quartz;
 using System;
 using HumanCron.Quartz.Helpers;
 using NaturalIntervalUnit = HumanCron.Models.Internal.IntervalUnit;
+using QuartzIntervalUnit = Quartz.IntervalUnit;
 
 namespace HumanCron.Quartz;
 
@@ -41,9 +42,9 @@ internal sealed class QuartzCalendarIntervalBuilder
         // Convert weeks to days to properly respect StartAt time
         builder = spec.Unit switch
         {
-            NaturalIntervalUnit.Weeks => builder.WithIntervalInDays(spec.Interval * 7),
-            NaturalIntervalUnit.Months => builder.WithIntervalInMonths(spec.Interval),
-            NaturalIntervalUnit.Years => builder.WithIntervalInYears(spec.Interval),
+            NaturalIntervalUnit.Weeks => builder.WithInterval(spec.Interval * 7, QuartzIntervalUnit.Day),
+            NaturalIntervalUnit.Months => builder.WithInterval(spec.Interval, QuartzIntervalUnit.Month),
+            NaturalIntervalUnit.Years => builder.WithInterval(spec.Interval, QuartzIntervalUnit.Year),
             _ => throw new InvalidOperationException($"CalendarInterval does not support unit: {spec.Unit}")
         };
 

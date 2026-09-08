@@ -46,7 +46,7 @@ public sealed class QuartzScheduleConverter : IQuartzScheduleConverter
 
     public ParseResult<IScheduleBuilder> ToQuartzSchedule(
         string naturalLanguage,
-        int misfireInstruction = 0)
+        CronTriggerMisfireInstruction misfireInstruction = CronTriggerMisfireInstruction.SmartPolicy)
     {
         return ToQuartzSchedule(naturalLanguage, (DateTimeZone?)null, misfireInstruction);
     }
@@ -61,7 +61,7 @@ public sealed class QuartzScheduleConverter : IQuartzScheduleConverter
     /// Use IANA timezone IDs (e.g., DateTimeZoneProviders.Tzdb["America/New_York"])
     /// </param>
     /// <param name="misfireInstruction">
-    /// Quartz misfire instruction constant (default: 0 = SmartPolicy)
+    /// Misfire policy (default: SmartPolicy), applied to whichever recurring trigger family results
     /// </param>
     /// <returns>ParseResult containing Quartz IScheduleBuilder or error</returns>
     /// <remarks>
@@ -75,7 +75,7 @@ public sealed class QuartzScheduleConverter : IQuartzScheduleConverter
     internal ParseResult<IScheduleBuilder> ToQuartzSchedule(
         string naturalLanguage,
         DateTimeZone? userTimezone,
-        int misfireInstruction = 0)
+        CronTriggerMisfireInstruction misfireInstruction = CronTriggerMisfireInstruction.SmartPolicy)
     {
         return ToQuartzSchedule(
             naturalLanguage,
@@ -87,7 +87,7 @@ public sealed class QuartzScheduleConverter : IQuartzScheduleConverter
     public ParseResult<IScheduleBuilder> ToQuartzSchedule(
         string naturalLanguage,
         Parsing.ScheduleParserOptions options,
-        int misfireInstruction = 0)
+        CronTriggerMisfireInstruction misfireInstruction = CronTriggerMisfireInstruction.SmartPolicy)
     {
         ArgumentNullException.ThrowIfNull(options);
 
@@ -185,9 +185,9 @@ public sealed class QuartzScheduleConverter : IQuartzScheduleConverter
         return new ParseResult<DateTimeOffset?>.Success(startTime);
     }
 
-    public ParseResult<TriggerBuilder> CreateTriggerBuilder(
+    public ParseResult<TriggerBuilder<IJob>> CreateTriggerBuilder(
         string naturalLanguage,
-        int misfireInstruction = 0)
+        CronTriggerMisfireInstruction misfireInstruction = CronTriggerMisfireInstruction.SmartPolicy)
     {
         // Get the schedule builder with misfire instruction applied
         // (ToQuartzSchedule validates input - null/empty/length checks)
@@ -195,7 +195,7 @@ public sealed class QuartzScheduleConverter : IQuartzScheduleConverter
         if (scheduleResult is not ParseResult<IScheduleBuilder>.Success scheduleSuccess)
         {
             var error = (ParseResult<IScheduleBuilder>.Error)scheduleResult;
-            return new ParseResult<TriggerBuilder>.Error(error.Message, error.Exception);
+            return new ParseResult<TriggerBuilder<IJob>>.Error(error.Message, error.Exception);
         }
 
         // Calculate start time (null if not needed)
@@ -203,7 +203,7 @@ public sealed class QuartzScheduleConverter : IQuartzScheduleConverter
         if (startTimeResult is not ParseResult<DateTimeOffset?>.Success startSuccess)
         {
             var error = (ParseResult<DateTimeOffset?>.Error)startTimeResult;
-            return new ParseResult<TriggerBuilder>.Error(error.Message, error.Exception);
+            return new ParseResult<TriggerBuilder<IJob>>.Error(error.Message, error.Exception);
         }
 
         // Create TriggerBuilder with schedule and optional start time
@@ -211,19 +211,19 @@ public sealed class QuartzScheduleConverter : IQuartzScheduleConverter
             .WithSchedule(scheduleSuccess.Value);
 
         // Set start time if calculated (for CalendarInterval schedules with constraints)
-        if (!startSuccess.Value.HasValue) return new ParseResult<TriggerBuilder>.Success(triggerBuilder);
+        if (!startSuccess.Value.HasValue) return new ParseResult<TriggerBuilder<IJob>>.Success(triggerBuilder);
         // Explicitly convert to UTC to ensure Quartz interprets it correctly
         var startTimeUtc = startSuccess.Value.Value.ToUniversalTime();
         triggerBuilder.StartAt(startTimeUtc);
 
-        return new ParseResult<TriggerBuilder>.Success(triggerBuilder);
+        return new ParseResult<TriggerBuilder<IJob>>.Success(triggerBuilder);
     }
 
     /// <inheritdoc/>
-    public ParseResult<TriggerBuilder> CreateTriggerBuilder(
+    public ParseResult<TriggerBuilder<IJob>> CreateTriggerBuilder(
         string naturalLanguage,
         Parsing.ScheduleParserOptions options,
-        int misfireInstruction = 0)
+        CronTriggerMisfireInstruction misfireInstruction = CronTriggerMisfireInstruction.SmartPolicy)
     {
         ArgumentNullException.ThrowIfNull(options);
 
@@ -233,7 +233,7 @@ public sealed class QuartzScheduleConverter : IQuartzScheduleConverter
         if (scheduleResult is not ParseResult<IScheduleBuilder>.Success scheduleSuccess)
         {
             var error = (ParseResult<IScheduleBuilder>.Error)scheduleResult;
-            return new ParseResult<TriggerBuilder>.Error(error.Message, error.Exception);
+            return new ParseResult<TriggerBuilder<IJob>>.Error(error.Message, error.Exception);
         }
 
         // Calculate start time (null if not needed)
@@ -241,7 +241,7 @@ public sealed class QuartzScheduleConverter : IQuartzScheduleConverter
         if (startTimeResult is not ParseResult<DateTimeOffset?>.Success startSuccess)
         {
             var error = (ParseResult<DateTimeOffset?>.Error)startTimeResult;
-            return new ParseResult<TriggerBuilder>.Error(error.Message, error.Exception);
+            return new ParseResult<TriggerBuilder<IJob>>.Error(error.Message, error.Exception);
         }
 
         // Create TriggerBuilder with schedule and optional start time
@@ -249,26 +249,26 @@ public sealed class QuartzScheduleConverter : IQuartzScheduleConverter
             .WithSchedule(scheduleSuccess.Value);
 
         // Set start time if calculated (for CalendarInterval schedules with constraints)
-        if (!startSuccess.Value.HasValue) return new ParseResult<TriggerBuilder>.Success(triggerBuilder);
+        if (!startSuccess.Value.HasValue) return new ParseResult<TriggerBuilder<IJob>>.Success(triggerBuilder);
         // Explicitly convert to UTC to ensure Quartz interprets it correctly
         var startTimeUtc = startSuccess.Value.Value.ToUniversalTime();
         triggerBuilder.StartAt(startTimeUtc);
 
-        return new ParseResult<TriggerBuilder>.Success(triggerBuilder);
+        return new ParseResult<TriggerBuilder<IJob>>.Success(triggerBuilder);
     }
 
     /// <inheritdoc/>
-    public ParseResult<TriggerBuilder> CreateOneTimeTriggerBuilder(
+    public ParseResult<TriggerBuilder<IJob>> CreateOneTimeTriggerBuilder(
         string duration,
         DateTimeOffset? anchor = null,
         DateTimeZone? timeZone = null,
-        int misfireInstruction = 0)
+        SimpleTriggerMisfireInstruction misfireInstruction = SimpleTriggerMisfireInstruction.SmartPolicy)
     {
         var futureTimeResult = _durationConverter.ToFutureTime(duration, anchor, timeZone);
         if (futureTimeResult is not ParseResult<DateTimeOffset>.Success success)
         {
             var error = (ParseResult<DateTimeOffset>.Error)futureTimeResult;
-            return new ParseResult<TriggerBuilder>.Error(error.Message, error.Exception);
+            return new ParseResult<TriggerBuilder<IJob>>.Error(error.Message, error.Exception);
         }
 
         var scheduleBuilder = MisfireInstructionHelper.ApplyMisfireInstruction(
@@ -279,6 +279,6 @@ public sealed class QuartzScheduleConverter : IQuartzScheduleConverter
             .WithSchedule(scheduleBuilder)
             .StartAt(success.Value.ToUniversalTime());
 
-        return new ParseResult<TriggerBuilder>.Success(triggerBuilder);
+        return new ParseResult<TriggerBuilder<IJob>>.Success(triggerBuilder);
     }
 }

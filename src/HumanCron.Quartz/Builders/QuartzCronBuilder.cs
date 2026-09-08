@@ -18,7 +18,7 @@ internal sealed class QuartzCronBuilder
     public IScheduleBuilder Build(ScheduleSpec spec)
     {
         var cronExpression = BuildCronExpression(spec);
-        var builder = CronScheduleBuilder.CronSchedule(cronExpression);
+        var builder = CronScheduleBuilder.Create(cronExpression);
 
         // Apply timezone (convert NodaTime → BCL for Quartz)
         var timeZoneInfo = TimeZoneConverter.ToTimeZoneInfo(spec.TimeZone);
