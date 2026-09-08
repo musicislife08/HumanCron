@@ -23,9 +23,11 @@ NCrontab and Hangfire packages are untouched apart from the shared version bump.
 
 ## Package and version
 
-- `Quartz` 3.18.2 -> 4.0.0 in `Directory.Packages.props`.
-- Before any code change, run the package-currency check and bump every other outdated package
-  to latest stable in the same first commit (standing policy).
+- **Task 1 is always the package update.** Run `dotnet list package --outdated` and
+  `dotnet list package --vulnerable`, bump every package in `Directory.Packages.props` to
+  latest stable (including `Quartz` 3.18.2 -> 4.0.0), and fix whatever the bumps break so the
+  solution builds and tests pass again. The Quartz 4 compile fixes therefore happen as part of
+  task 1, not as a later task. Nothing else starts until that commit is green.
 - `Version` 0.8.0 -> 0.9.0 in `Directory.Build.props`. All packages release together.
 - Target framework stays `net10.0`.
 - Package description, README and INTEGRATION.md state that HumanCron.Quartz 0.9+ requires
