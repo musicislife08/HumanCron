@@ -151,8 +151,8 @@ public class QuartzScheduleBuilderTests
         // Assert - Verify our code set the interval properties correctly
         Assert.That(trigger, Is.InstanceOf<ICalendarIntervalTrigger>());
         var calendarTrigger = (ICalendarIntervalTrigger)trigger;
-        Assert.That(calendarTrigger.RepeatInterval, Is.EqualTo(21));
-        Assert.That(calendarTrigger.RepeatIntervalUnit, Is.EqualTo(QuartzIntervalUnit.Day));
+        Assert.That(calendarTrigger.RepeatInterval, Is.EqualTo(3));
+        Assert.That(calendarTrigger.RepeatIntervalUnit, Is.EqualTo(QuartzIntervalUnit.Week));
     }
 
     [Test]
@@ -228,54 +228,34 @@ public class QuartzScheduleBuilderTests
     }
 
     /// <summary>
-    /// WORKAROUND TEST for Quartz.NET bug #1035:
-    /// https://github.com/quartznet/quartznet/issues/1035
-    ///
-    /// CalendarIntervalScheduleBuilder.WithIntervalInWeeks() ignores the StartAt parameter.
-    /// When a trigger is created with both a week interval and a StartAt time, Quartz fires
-    /// immediately instead of waiting for the StartAt time.
-    ///
-    /// Our workaround: Convert weeks to days (3 weeks = 21 days) which properly respects StartAt.
-    ///
-    /// This test validates:
-    /// 1. Multi-week intervals are converted to day intervals (every 3 weeks → 21 days)
-    /// 2. The interval unit is set to DAYS, not WEEKS
-    /// 3. This ensures compatibility with StartAt times
-    ///
-    /// If Quartz fixes this bug in the future, we can revert to using WithIntervalInWeeks()
-    /// and this test will fail, alerting us to update our implementation.
+    /// Quartz.NET issue 1035 (a week interval ignoring StartAt) forced HumanCron 0.8 and earlier
+    /// to express week intervals as days. Quartz 4 respects StartAt for week intervals, so the
+    /// builder emits weeks again. This test guards the original symptom: the first fire must be
+    /// exactly the StartAt instant and the second one interval later.
     /// </summary>
     [Test]
-    public void CalendarInterval_Build3WeekInterval_ConvertsToDaysToWorkaroundQuartzBug1035()
+    public void CalendarInterval_WeekIntervalWithFutureStartAt_FirstFireIsStartAt()
     {
-        // Arrange - Multi-week interval (the problematic case in Quartz bug #1035)
+        // Arrange
         var spec = new ScheduleSpec
         {
             Interval = 3,
             Unit = IntervalUnit.Weeks,
             TimeZone = DateTimeZone.Utc
         };
-        var builder = new QuartzCalendarIntervalBuilder();
+        var startAt = new DateTimeOffset(2030, 1, 6, 14, 0, 0, TimeSpan.Zero);
 
         // Act
-        var scheduleBuilder = builder.Build(spec);
         var trigger = TriggerBuilder.Create()
-            .WithSchedule(scheduleBuilder)
-            .StartNow()
+            .WithSchedule(new QuartzCalendarIntervalBuilder().Build(spec))
+            .StartAt(startAt)
             .Build();
+        var first = trigger.GetFireTimeAfter(startAt.AddSeconds(-1));
+        var second = trigger.GetFireTimeAfter(first!.Value);
 
-        // Assert - Verify workaround: weeks converted to days
-        Assert.That(trigger, Is.InstanceOf<ICalendarIntervalTrigger>());
-        var calendarTrigger = (ICalendarIntervalTrigger)trigger;
-
-        // CRITICAL: Should be 21 days, NOT 3 weeks (workaround for bug #1035)
-        Assert.That(calendarTrigger.RepeatInterval, Is.EqualTo(21),
-            "Expected 21 days (not 3 weeks) as workaround for Quartz bug #1035");
-        Assert.That(calendarTrigger.RepeatIntervalUnit, Is.EqualTo(QuartzIntervalUnit.Day),
-            "Expected DAY interval unit (not WEEK) as workaround for Quartz bug #1035");
-
-        // If this test fails in the future with Quartz updates, it may indicate the bug is fixed.
-        // Check Quartz release notes and consider reverting to WithIntervalInWeeks() if safe.
+        // Assert
+        Assert.That(first, Is.EqualTo(startAt));
+        Assert.That(second, Is.EqualTo(startAt.AddDays(21)));
     }
 
     // ========================================

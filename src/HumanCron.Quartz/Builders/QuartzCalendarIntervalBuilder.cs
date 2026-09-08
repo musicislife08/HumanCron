@@ -38,11 +38,9 @@ internal sealed class QuartzCalendarIntervalBuilder
         var builder = CalendarIntervalScheduleBuilder.Create();
 
         // Set the interval unit and value
-        // WORKAROUND: Quartz bug #1035 - WithIntervalInWeeks() ignores StartAt
-        // Convert weeks to days to properly respect StartAt time
         builder = spec.Unit switch
         {
-            NaturalIntervalUnit.Weeks => builder.WithInterval(spec.Interval * 7, QuartzIntervalUnit.Day),
+            NaturalIntervalUnit.Weeks => builder.WithInterval(spec.Interval, QuartzIntervalUnit.Week),
             NaturalIntervalUnit.Months => builder.WithInterval(spec.Interval, QuartzIntervalUnit.Month),
             NaturalIntervalUnit.Years => builder.WithInterval(spec.Interval, QuartzIntervalUnit.Year),
             _ => throw new InvalidOperationException($"CalendarInterval does not support unit: {spec.Unit}")
