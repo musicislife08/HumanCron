@@ -70,8 +70,9 @@ recurring method says the value is applied to whichever recurring trigger family
 The one-time trigger method always builds a simple trigger, so it takes that family's enum
 directly.
 
-`IQuartzScheduleConverter` and the `ScheduleBuilderExtensions` fluent entry points change to
-match.
+`IQuartzScheduleConverter` and `QuartzScheduleConverter` change to match. The
+`ScheduleBuilderExtensions` fluent entry points return `IScheduleBuilder` and take no misfire
+parameter, so they are unaffected.
 
 ## Internal changes
 
