@@ -720,6 +720,18 @@ the same four members with identical values, so nothing is lost in the mapping. 
 
 Quartz 3 consumers should stay on HumanCron.Quartz 0.8.0 (and therefore HumanCron 0.8.0).
 
+HumanCron 0.8 (Quartz 3) had no native "every N weeks" calendar interval, so it persisted multi-week
+schedules internally as a day-unit calendar-interval trigger whose `RepeatInterval` was a multiple of
+7 - a workaround for a Quartz 3 bug where week intervals ignored `StartAt`. Quartz 4 fixes that bug, so
+HumanCron 0.9 now builds and expects real week-unit triggers, and the parser's day-multiple-of-7 reverse
+mapping was removed. One consequence: if you have triggers that were built and persisted by HumanCron
+0.8 (e.g. sitting in a live Quartz `IJobStore`), calling `IQuartzScheduleConverter.ToNaturalLanguage(...)`
+on one of those old triggers after upgrading no longer reconstructs `"2w"`-style natural language - it
+now returns `ParseResult<string>.Error("Unsupported calendar interval unit: Day")`. New schedules created
+by 0.9 are unaffected, since they persist as real week intervals; only pre-existing 0.8-era persisted
+triggers hit this. If you need natural language back for one of those, re-create the trigger from its
+original natural-language source rather than relying on the reverse conversion.
+
 #### Rejecting Schedules That Fire Too Often (MinInterval)
 
 ```csharp
