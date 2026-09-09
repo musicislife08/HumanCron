@@ -75,11 +75,6 @@ internal sealed class QuartzScheduleParser : IQuartzScheduleParser
     {
         var (interval, unit) = calendarTrigger.RepeatIntervalUnit switch
         {
-            // WORKAROUND: Quartz bug #1035 - we convert weeks to days in the builder
-            // When parsing back, recognize day intervals that are multiples of 7 as weeks
-            QuartzIntervalUnit.Day when calendarTrigger.RepeatInterval % 7 == 0
-                => (calendarTrigger.RepeatInterval / 7, NaturalIntervalUnit.Weeks),
-
             QuartzIntervalUnit.Week => (calendarTrigger.RepeatInterval, NaturalIntervalUnit.Weeks),
             QuartzIntervalUnit.Month => (calendarTrigger.RepeatInterval, NaturalIntervalUnit.Months),
             QuartzIntervalUnit.Year => (calendarTrigger.RepeatInterval, NaturalIntervalUnit.Years),

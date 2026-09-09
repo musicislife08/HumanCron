@@ -1,15 +1,16 @@
 using HumanCron.Models;
-using HumanCron.Quartz.Abstractions;
 using HumanCron.Quartz;
+using HumanCron.Quartz.Abstractions;
 using HumanCron.Quartz.Helpers;
 using Quartz;
 
 namespace HumanCron.Tests.Quartz;
 
 /// <summary>
-/// Tests for Quartz misfire instruction support
-/// Verifies that misfire policies are correctly applied to both CronScheduleBuilder
-/// and CalendarIntervalScheduleBuilder via the public API
+/// Tests for Quartz misfire instruction support.
+/// Recurring schedules accept <see cref="CronTriggerMisfireInstruction"/> and apply it to whichever
+/// trigger family (cron or calendar-interval) the parse produces. One-time triggers take
+/// <see cref="SimpleTriggerMisfireInstruction"/> directly because that family is fixed.
 /// </summary>
 [TestFixture]
 public class QuartzMisfireInstructionTests
@@ -22,506 +23,119 @@ public class QuartzMisfireInstructionTests
         _converter = QuartzScheduleConverterFactory.Create();
     }
 
-    #region ToQuartzSchedule - CronScheduleBuilder Tests
+    private static ITrigger BuildTrigger(IScheduleBuilder scheduleBuilder) =>
+        TriggerBuilder.Create().WithIdentity("test").WithSchedule(scheduleBuilder).Build();
+
+    private static IScheduleBuilder SuccessSchedule(ParseResult<IScheduleBuilder> result)
+    {
+        Assert.That(result, Is.TypeOf<ParseResult<IScheduleBuilder>.Success>());
+        return ((ParseResult<IScheduleBuilder>.Success)result).Value;
+    }
+
+    private static ITrigger SuccessTrigger(ParseResult<TriggerBuilder<IJob>> result)
+    {
+        Assert.That(result, Is.TypeOf<ParseResult<TriggerBuilder<IJob>>.Success>());
+        return ((ParseResult<TriggerBuilder<IJob>>.Success)result).Value.Build();
+    }
+
+    #region ToQuartzSchedule - cron family
 
     [Test]
     public void ToQuartzSchedule_CronSchedule_DefaultMisfire_UsesSmartPolicy()
     {
-        // Arrange - Daily schedule (uses CronScheduleBuilder)
-        var natural = "every day at 2pm";
-
-        // Act - Call with default misfire (0 = SmartPolicy)
-        var result = _converter.ToQuartzSchedule(natural);
-
-        // Assert
-        Assert.That(result, Is.TypeOf<ParseResult<IScheduleBuilder>.Success>());
-        var scheduleBuilder = ((ParseResult<IScheduleBuilder>.Success)result).Value;
-
-        // Build trigger to verify misfire instruction
-        var trigger = TriggerBuilder.Create()
-            .WithIdentity("test")
-            .WithSchedule(scheduleBuilder)
-            .Build();
+        var trigger = BuildTrigger(SuccessSchedule(_converter.ToQuartzSchedule("every day at 2pm")));
 
         Assert.That(trigger, Is.InstanceOf<ICronTrigger>());
-        var cronTrigger = (ICronTrigger)trigger;
-
-        // SmartPolicy is the default (value 0)
-        Assert.That(cronTrigger.MisfireInstruction, Is.EqualTo(MisfireInstruction.SmartPolicy));
+        Assert.That(((ICronTrigger)trigger).MisfireInstruction, Is.EqualTo(CronTriggerMisfireInstruction.SmartPolicy));
     }
 
-    [Test]
-    public void ToQuartzSchedule_CronSchedule_DoNothing_AppliesCorrectly()
+    [TestCase("every hour", CronTriggerMisfireInstruction.DoNothing)]
+    [TestCase("every 30 minutes", CronTriggerMisfireInstruction.IgnoreMisfires)]
+    [TestCase("every day at 9am", CronTriggerMisfireInstruction.FireAndProceed)]
+    [TestCase("every day at 10am", CronTriggerMisfireInstruction.SmartPolicy)]
+    public void ToQuartzSchedule_CronSchedule_AppliesInstruction(string natural, CronTriggerMisfireInstruction instruction)
     {
-        // Arrange
-        var natural = "every hour";
-
-        // Act - Apply DoNothing misfire instruction
-        var result = _converter.ToQuartzSchedule(natural, MisfireInstruction.CronTrigger.DoNothing);
-
-        // Assert
-        Assert.That(result, Is.TypeOf<ParseResult<IScheduleBuilder>.Success>());
-        var scheduleBuilder = ((ParseResult<IScheduleBuilder>.Success)result).Value;
-
-        var trigger = TriggerBuilder.Create()
-            .WithIdentity("test")
-            .WithSchedule(scheduleBuilder)
-            .Build();
+        var trigger = BuildTrigger(SuccessSchedule(_converter.ToQuartzSchedule(natural, instruction)));
 
         Assert.That(trigger, Is.InstanceOf<ICronTrigger>());
-        var cronTrigger = (ICronTrigger)trigger;
-        Assert.That(cronTrigger.MisfireInstruction, Is.EqualTo(MisfireInstruction.CronTrigger.DoNothing));
-    }
-
-    [Test]
-    public void ToQuartzSchedule_CronSchedule_IgnoreMisfirePolicy_AppliesCorrectly()
-    {
-        // Arrange
-        var natural = "every 30 minutes";
-
-        // Act - Apply IgnoreMisfirePolicy
-        var result = _converter.ToQuartzSchedule(natural, MisfireInstruction.IgnoreMisfirePolicy);
-
-        // Assert
-        Assert.That(result, Is.TypeOf<ParseResult<IScheduleBuilder>.Success>());
-        var scheduleBuilder = ((ParseResult<IScheduleBuilder>.Success)result).Value;
-
-        var trigger = TriggerBuilder.Create()
-            .WithIdentity("test")
-            .WithSchedule(scheduleBuilder)
-            .Build();
-
-        Assert.That(trigger, Is.InstanceOf<ICronTrigger>());
-        var cronTrigger = (ICronTrigger)trigger;
-        Assert.That(cronTrigger.MisfireInstruction, Is.EqualTo(MisfireInstruction.IgnoreMisfirePolicy));
-    }
-
-    [Test]
-    public void ToQuartzSchedule_CronSchedule_FireOnceNow_AppliesCorrectly()
-    {
-        // Arrange
-        var natural = "every day at 9am";
-
-        // Act - Apply FireOnceNow (FireAndProceed in Quartz terms)
-        var result = _converter.ToQuartzSchedule(natural, MisfireInstruction.CronTrigger.FireOnceNow);
-
-        // Assert
-        Assert.That(result, Is.TypeOf<ParseResult<IScheduleBuilder>.Success>());
-        var scheduleBuilder = ((ParseResult<IScheduleBuilder>.Success)result).Value;
-
-        var trigger = TriggerBuilder.Create()
-            .WithIdentity("test")
-            .WithSchedule(scheduleBuilder)
-            .Build();
-
-        Assert.That(trigger, Is.InstanceOf<ICronTrigger>());
-        var cronTrigger = (ICronTrigger)trigger;
-        Assert.That(cronTrigger.MisfireInstruction, Is.EqualTo(MisfireInstruction.CronTrigger.FireOnceNow));
+        Assert.That(((ICronTrigger)trigger).MisfireInstruction, Is.EqualTo(instruction));
     }
 
     #endregion
 
-    #region ToQuartzSchedule - CalendarIntervalScheduleBuilder Tests
+    #region ToQuartzSchedule - calendar-interval family
 
     [Test]
     public void ToQuartzSchedule_CalendarInterval_DefaultMisfire_UsesSmartPolicy()
     {
-        // Arrange - Multi-week schedule (uses CalendarIntervalScheduleBuilder)
-        var natural = "every 2 weeks";
-
-        // Act - Call with default misfire
-        var result = _converter.ToQuartzSchedule(natural);
-
-        // Assert
-        Assert.That(result, Is.TypeOf<ParseResult<IScheduleBuilder>.Success>());
-        var scheduleBuilder = ((ParseResult<IScheduleBuilder>.Success)result).Value;
-
-        var trigger = TriggerBuilder.Create()
-            .WithIdentity("test")
-            .WithSchedule(scheduleBuilder)
-            .Build();
+        var trigger = BuildTrigger(SuccessSchedule(_converter.ToQuartzSchedule("every 2 weeks")));
 
         Assert.That(trigger, Is.InstanceOf<ICalendarIntervalTrigger>());
-        var calendarTrigger = (ICalendarIntervalTrigger)trigger;
-
-        // SmartPolicy is the default
-        Assert.That(calendarTrigger.MisfireInstruction, Is.EqualTo(MisfireInstruction.SmartPolicy));
+        Assert.That(((ICalendarIntervalTrigger)trigger).MisfireInstruction,
+            Is.EqualTo(CalendarIntervalTriggerMisfireInstruction.SmartPolicy));
     }
 
-    [Test]
-    public void ToQuartzSchedule_CalendarInterval_DoNothing_AppliesCorrectly()
+    [TestCase("every 3 months", CronTriggerMisfireInstruction.DoNothing, CalendarIntervalTriggerMisfireInstruction.DoNothing)]
+    [TestCase("every year", CronTriggerMisfireInstruction.IgnoreMisfires, CalendarIntervalTriggerMisfireInstruction.IgnoreMisfires)]
+    [TestCase("every 2 weeks on sunday", CronTriggerMisfireInstruction.FireAndProceed, CalendarIntervalTriggerMisfireInstruction.FireAndProceed)]
+    [TestCase("every 2 weeks on sunday at 2pm", CronTriggerMisfireInstruction.DoNothing, CalendarIntervalTriggerMisfireInstruction.DoNothing)]
+    public void ToQuartzSchedule_CalendarInterval_MapsCronInstructionToCalendarFamily(
+        string natural,
+        CronTriggerMisfireInstruction given,
+        CalendarIntervalTriggerMisfireInstruction expected)
     {
-        // Arrange
-        var natural = "every 3 months";
-
-        // Act
-        var result = _converter.ToQuartzSchedule(natural, MisfireInstruction.CalendarIntervalTrigger.DoNothing);
-
-        // Assert
-        Assert.That(result, Is.TypeOf<ParseResult<IScheduleBuilder>.Success>());
-        var scheduleBuilder = ((ParseResult<IScheduleBuilder>.Success)result).Value;
-
-        var trigger = TriggerBuilder.Create()
-            .WithIdentity("test")
-            .WithSchedule(scheduleBuilder)
-            .Build();
+        var trigger = BuildTrigger(SuccessSchedule(_converter.ToQuartzSchedule(natural, given)));
 
         Assert.That(trigger, Is.InstanceOf<ICalendarIntervalTrigger>());
-        var calendarTrigger = (ICalendarIntervalTrigger)trigger;
-        Assert.That(calendarTrigger.MisfireInstruction,
-            Is.EqualTo(MisfireInstruction.CalendarIntervalTrigger.DoNothing));
-    }
-
-    [Test]
-    public void ToQuartzSchedule_CalendarInterval_IgnoreMisfirePolicy_AppliesCorrectly()
-    {
-        // Arrange
-        var natural = "every year";
-
-        // Act
-        var result = _converter.ToQuartzSchedule(natural, MisfireInstruction.IgnoreMisfirePolicy);
-
-        // Assert
-        Assert.That(result, Is.TypeOf<ParseResult<IScheduleBuilder>.Success>());
-        var scheduleBuilder = ((ParseResult<IScheduleBuilder>.Success)result).Value;
-
-        var trigger = TriggerBuilder.Create()
-            .WithIdentity("test")
-            .WithSchedule(scheduleBuilder)
-            .Build();
-
-        Assert.That(trigger, Is.InstanceOf<ICalendarIntervalTrigger>());
-        var calendarTrigger = (ICalendarIntervalTrigger)trigger;
-        Assert.That(calendarTrigger.MisfireInstruction, Is.EqualTo(MisfireInstruction.IgnoreMisfirePolicy));
-    }
-
-    [Test]
-    public void ToQuartzSchedule_CalendarInterval_FireOnceNow_AppliesCorrectly()
-    {
-        // Arrange
-        var natural = "every 2 weeks on sunday";
-
-        // Act
-        var result = _converter.ToQuartzSchedule(natural, MisfireInstruction.CalendarIntervalTrigger.FireOnceNow);
-
-        // Assert
-        Assert.That(result, Is.TypeOf<ParseResult<IScheduleBuilder>.Success>());
-        var scheduleBuilder = ((ParseResult<IScheduleBuilder>.Success)result).Value;
-
-        var trigger = TriggerBuilder.Create()
-            .WithIdentity("test")
-            .WithSchedule(scheduleBuilder)
-            .Build();
-
-        Assert.That(trigger, Is.InstanceOf<ICalendarIntervalTrigger>());
-        var calendarTrigger = (ICalendarIntervalTrigger)trigger;
-        Assert.That(calendarTrigger.MisfireInstruction,
-            Is.EqualTo(MisfireInstruction.CalendarIntervalTrigger.FireOnceNow));
+        Assert.That(((ICalendarIntervalTrigger)trigger).MisfireInstruction, Is.EqualTo(expected));
+        Assert.That(trigger.GetFireTimeAfter(DateTimeOffset.UtcNow), Is.Not.Null);
     }
 
     #endregion
 
-    #region CreateTriggerBuilder - CronScheduleBuilder Tests
+    #region CreateTriggerBuilder
 
     [Test]
     public void CreateTriggerBuilder_CronSchedule_DefaultMisfire_UsesSmartPolicy()
     {
-        // Arrange
-        var natural = "every day at 2pm";
-
-        // Act - Create trigger with default misfire
-        var result = _converter.CreateTriggerBuilder(natural);
-
-        // Assert
-        Assert.That(result, Is.TypeOf<ParseResult<TriggerBuilder>.Success>());
-        var triggerBuilder = ((ParseResult<TriggerBuilder>.Success)result).Value;
-        var trigger = triggerBuilder.Build();
+        var trigger = SuccessTrigger(_converter.CreateTriggerBuilder("every day at 2pm"));
 
         Assert.That(trigger, Is.InstanceOf<ICronTrigger>());
-        var cronTrigger = (ICronTrigger)trigger;
-        Assert.That(cronTrigger.MisfireInstruction, Is.EqualTo(MisfireInstruction.SmartPolicy));
+        Assert.That(((ICronTrigger)trigger).MisfireInstruction, Is.EqualTo(CronTriggerMisfireInstruction.SmartPolicy));
     }
-
-    [Test]
-    public void CreateTriggerBuilder_CronSchedule_DoNothing_AppliesCorrectly()
-    {
-        // Arrange
-        var natural = "every hour";
-
-        // Act
-        var result = _converter.CreateTriggerBuilder(natural, MisfireInstruction.CronTrigger.DoNothing);
-
-        // Assert
-        Assert.That(result, Is.TypeOf<ParseResult<TriggerBuilder>.Success>());
-        var trigger = ((ParseResult<TriggerBuilder>.Success)result).Value.Build();
-
-        Assert.That(trigger, Is.InstanceOf<ICronTrigger>());
-        var cronTrigger = (ICronTrigger)trigger;
-        Assert.That(cronTrigger.MisfireInstruction, Is.EqualTo(MisfireInstruction.CronTrigger.DoNothing));
-    }
-
-    [Test]
-    public void CreateTriggerBuilder_CronSchedule_IgnoreMisfirePolicy_AppliesCorrectly()
-    {
-        // Arrange
-        var natural = "every 15 minutes";
-
-        // Act
-        var result = _converter.CreateTriggerBuilder(natural, MisfireInstruction.IgnoreMisfirePolicy);
-
-        // Assert
-        Assert.That(result, Is.TypeOf<ParseResult<TriggerBuilder>.Success>());
-        var trigger = ((ParseResult<TriggerBuilder>.Success)result).Value.Build();
-
-        Assert.That(trigger, Is.InstanceOf<ICronTrigger>());
-        var cronTrigger = (ICronTrigger)trigger;
-        Assert.That(cronTrigger.MisfireInstruction, Is.EqualTo(MisfireInstruction.IgnoreMisfirePolicy));
-    }
-
-    #endregion
-
-    #region CreateTriggerBuilder - CalendarIntervalScheduleBuilder Tests
 
     [Test]
     public void CreateTriggerBuilder_CalendarInterval_DefaultMisfire_UsesSmartPolicy()
     {
-        // Arrange
-        var natural = "every 2 weeks";
-
-        // Act
-        var result = _converter.CreateTriggerBuilder(natural);
-
-        // Assert
-        Assert.That(result, Is.TypeOf<ParseResult<TriggerBuilder>.Success>());
-        var trigger = ((ParseResult<TriggerBuilder>.Success)result).Value.Build();
+        var trigger = SuccessTrigger(_converter.CreateTriggerBuilder("every 2 weeks on monday"));
 
         Assert.That(trigger, Is.InstanceOf<ICalendarIntervalTrigger>());
-        var calendarTrigger = (ICalendarIntervalTrigger)trigger;
-        Assert.That(calendarTrigger.MisfireInstruction, Is.EqualTo(MisfireInstruction.SmartPolicy));
+        Assert.That(((ICalendarIntervalTrigger)trigger).MisfireInstruction,
+            Is.EqualTo(CalendarIntervalTriggerMisfireInstruction.SmartPolicy));
     }
 
-    [Test]
-    public void CreateTriggerBuilder_CalendarInterval_DoNothing_AppliesCorrectly()
-    {
-        // Arrange
-        var natural = "every 3 months";
-
-        // Act
-        var result = _converter.CreateTriggerBuilder(natural, MisfireInstruction.CalendarIntervalTrigger.DoNothing);
-
-        // Assert
-        Assert.That(result, Is.TypeOf<ParseResult<TriggerBuilder>.Success>());
-        var trigger = ((ParseResult<TriggerBuilder>.Success)result).Value.Build();
-
-        Assert.That(trigger, Is.InstanceOf<ICalendarIntervalTrigger>());
-        var calendarTrigger = (ICalendarIntervalTrigger)trigger;
-        Assert.That(calendarTrigger.MisfireInstruction,
-            Is.EqualTo(MisfireInstruction.CalendarIntervalTrigger.DoNothing));
-    }
-
-    [Test]
-    public void CreateTriggerBuilder_CalendarInterval_IgnoreMisfirePolicy_AppliesCorrectly()
-    {
-        // Arrange
-        var natural = "every year";
-
-        // Act
-        var result = _converter.CreateTriggerBuilder(natural, MisfireInstruction.IgnoreMisfirePolicy);
-
-        // Assert
-        Assert.That(result, Is.TypeOf<ParseResult<TriggerBuilder>.Success>());
-        var trigger = ((ParseResult<TriggerBuilder>.Success)result).Value.Build();
-
-        Assert.That(trigger, Is.InstanceOf<ICalendarIntervalTrigger>());
-        var calendarTrigger = (ICalendarIntervalTrigger)trigger;
-        Assert.That(calendarTrigger.MisfireInstruction, Is.EqualTo(MisfireInstruction.IgnoreMisfirePolicy));
-    }
-
-    #endregion
-
-    #region Backwards Compatibility Tests
-
-    [Test]
-    public void ToQuartzSchedule_WithoutMisfireParameter_UsesDefaultSmartPolicy()
-    {
-        // Arrange
-        var natural = "every day at 9am";
-
-        // Act - Call without misfire parameter (backwards compatibility)
-        var result = _converter.ToQuartzSchedule(natural);
-
-        // Assert - Should use SmartPolicy (default)
-        Assert.That(result, Is.TypeOf<ParseResult<IScheduleBuilder>.Success>());
-        var scheduleBuilder = ((ParseResult<IScheduleBuilder>.Success)result).Value;
-
-        var trigger = TriggerBuilder.Create()
-            .WithIdentity("test")
-            .WithSchedule(scheduleBuilder)
-            .Build();
-
-        Assert.That(trigger, Is.Not.Null);
-        Assert.That(trigger.MisfireInstruction, Is.EqualTo(MisfireInstruction.SmartPolicy));
-    }
-
-    [Test]
-    public void CreateTriggerBuilder_WithoutMisfireParameter_UsesDefaultSmartPolicy()
-    {
-        // Arrange
-        var natural = "every 2 weeks on monday";
-
-        // Act - Call without misfire parameter (backwards compatibility)
-        var result = _converter.CreateTriggerBuilder(natural);
-
-        // Assert - Should use SmartPolicy (default)
-        Assert.That(result, Is.TypeOf<ParseResult<TriggerBuilder>.Success>());
-        var trigger = ((ParseResult<TriggerBuilder>.Success)result).Value.Build();
-
-        Assert.That(trigger, Is.Not.Null);
-        Assert.That(trigger.MisfireInstruction, Is.EqualTo(MisfireInstruction.SmartPolicy));
-    }
-
-    #endregion
-
-    #region Trigger Functionality Tests
-
-    [TestCase("every day at 2pm", MisfireInstruction.CronTrigger.DoNothing)]
-    [TestCase("every 2 weeks on monday", MisfireInstruction.CalendarIntervalTrigger.DoNothing)]
-    [TestCase("every month at 9am", MisfireInstruction.IgnoreMisfirePolicy)]
-    [TestCase("every hour", MisfireInstruction.CronTrigger.FireOnceNow)]
-    public void CreateTriggerBuilder_VariousSchedulesAndMisfires_CreatesValidTrigger(
+    [TestCase("every hour", CronTriggerMisfireInstruction.DoNothing)]
+    [TestCase("every 15 minutes", CronTriggerMisfireInstruction.IgnoreMisfires)]
+    [TestCase("every day at 2pm", CronTriggerMisfireInstruction.FireAndProceed)]
+    [TestCase("every week at 5pm", CronTriggerMisfireInstruction.SmartPolicy)]
+    [TestCase("every 3 months", CronTriggerMisfireInstruction.DoNothing)]
+    [TestCase("every year", CronTriggerMisfireInstruction.IgnoreMisfires)]
+    [TestCase("every 2 weeks on monday", CronTriggerMisfireInstruction.DoNothing)]
+    [TestCase("every month at 9am", CronTriggerMisfireInstruction.IgnoreMisfires)]
+    public void CreateTriggerBuilder_AppliesInstructionCodeToResultingFamily(
         string natural,
-        int misfireInstruction)
+        CronTriggerMisfireInstruction instruction)
     {
-        // Act
-        var result = _converter.CreateTriggerBuilder(natural, misfireInstruction);
+        var trigger = SuccessTrigger(_converter.CreateTriggerBuilder(natural, instruction));
 
-        // Assert
-        Assert.That(result, Is.TypeOf<ParseResult<TriggerBuilder>.Success>());
-        var trigger = ((ParseResult<TriggerBuilder>.Success)result).Value.Build();
-
-        // Verify trigger can calculate next fire time
-        var nextFire = trigger.GetFireTimeAfter(DateTimeOffset.UtcNow);
-        Assert.That(nextFire, Is.Not.Null,
-            $"Trigger with pattern '{natural}' and misfire '{misfireInstruction}' should have valid next fire time");
-
-        // Verify misfire instruction was applied
-        Assert.That(trigger.MisfireInstruction, Is.EqualTo(misfireInstruction),
-            $"Misfire instruction should be {misfireInstruction}");
-    }
-
-    [TestCase("every day at 3pm", 0)] // SmartPolicy
-    [TestCase("every week", -1)] // IgnoreMisfirePolicy
-    [TestCase("every month", 1)] // FireOnceNow
-    [TestCase("every year", 2)] // DoNothing
-    public void ToQuartzSchedule_WithRawIntValues_AppliesCorrectly(string natural, int misfireValue)
-    {
-        // Act
-        var result = _converter.ToQuartzSchedule(natural, misfireValue);
-
-        // Assert
-        Assert.That(result, Is.TypeOf<ParseResult<IScheduleBuilder>.Success>());
-        var scheduleBuilder = ((ParseResult<IScheduleBuilder>.Success)result).Value;
-
-        var trigger = TriggerBuilder.Create()
-            .WithIdentity("test")
-            .WithSchedule(scheduleBuilder)
-            .Build();
-
-        Assert.That(trigger.MisfireInstruction, Is.EqualTo(misfireValue),
-            $"Misfire instruction should match raw value {misfireValue}");
+        Assert.That(trigger.MisfireInstructionCode, Is.EqualTo((int)instruction));
+        Assert.That(trigger.GetFireTimeAfter(DateTimeOffset.UtcNow), Is.Not.Null,
+            $"Trigger for '{natural}' with {instruction} should have a next fire time");
     }
 
     #endregion
 
-    #region Edge Cases
-
-    [Test]
-    public void ToQuartzSchedule_WithInvalidMisfireValue_ReturnsError()
-    {
-        // Arrange
-        var natural = "every hour";
-        var invalidMisfire = 999; // Invalid value
-
-        // Act
-        var result = _converter.ToQuartzSchedule(natural, invalidMisfire);
-
-        // Assert - Message is now a clean, stable string; the underlying
-        // ArgumentOutOfRangeException (with the "misfire"/"999" detail) is
-        // carried separately via Error.Exception.
-        Assert.That(result, Is.TypeOf<ParseResult<IScheduleBuilder>.Error>());
-        var error = (ParseResult<IScheduleBuilder>.Error)result;
-        Assert.That(error.Message, Does.Contain("Quartz schedule").IgnoreCase);
-        Assert.That(error.Exception, Is.Not.Null);
-        Assert.That(error.Exception!.Message, Does.Contain("misfire").IgnoreCase);
-        Assert.That(error.Exception!.Message, Does.Contain("999"));
-    }
-
-    [Test]
-    public void CreateTriggerBuilder_WithInvalidMisfireValue_ReturnsError()
-    {
-        // Arrange
-        var natural = "every day at 2pm";
-        var invalidMisfire = 999; // Invalid value
-
-        // Act
-        var result = _converter.CreateTriggerBuilder(natural, invalidMisfire);
-
-        // Assert - clean Message check; see
-        // CreateTriggerBuilder_WithInvalidMisfireValue_PropagatesException below
-        // for the Exception-propagation assertions.
-        Assert.That(result, Is.TypeOf<ParseResult<TriggerBuilder>.Error>());
-        var error = (ParseResult<TriggerBuilder>.Error)result;
-        Assert.That(error.Message, Does.Contain("Quartz schedule").IgnoreCase);
-    }
-
-    [Test]
-    public void CreateTriggerBuilder_WithInvalidMisfireValue_PropagatesException()
-    {
-        // Arrange
-        var natural = "every day at 2pm";
-        var invalidMisfire = 999; // Invalid value
-
-        // Act
-        var result = _converter.CreateTriggerBuilder(natural, invalidMisfire);
-
-        // Assert - CreateTriggerBuilder now propagates the original Exception
-        // from the underlying ToQuartzSchedule error remap, not just the
-        // clean Message, proving the fix reaches this public entry point.
-        Assert.That(result, Is.TypeOf<ParseResult<TriggerBuilder>.Error>());
-        var error = (ParseResult<TriggerBuilder>.Error)result;
-        Assert.That(error.Message, Does.Contain("Quartz schedule").IgnoreCase);
-        Assert.That(error.Exception, Is.Not.Null);
-        Assert.That(error.Exception!.Message, Does.Contain("misfire").IgnoreCase);
-        Assert.That(error.Exception!.Message, Does.Contain("999"));
-    }
-
-    [Test]
-    public void ToQuartzSchedule_ComplexScheduleWithMisfire_WorksCorrectly()
-    {
-        // Arrange - Complex schedule with day-of-week constraint and misfire
-        var natural = "every 2 weeks on sunday at 2pm";
-
-        // Act
-        var result = _converter.ToQuartzSchedule(natural, MisfireInstruction.CalendarIntervalTrigger.DoNothing);
-
-        // Assert
-        Assert.That(result, Is.TypeOf<ParseResult<IScheduleBuilder>.Success>());
-        var scheduleBuilder = ((ParseResult<IScheduleBuilder>.Success)result).Value;
-
-        var trigger = TriggerBuilder.Create()
-            .WithIdentity("test")
-            .WithSchedule(scheduleBuilder)
-            .Build();
-
-        // Verify it's a calendar interval trigger with correct misfire
-        Assert.That(trigger, Is.InstanceOf<ICalendarIntervalTrigger>());
-        Assert.That(trigger.MisfireInstruction,
-            Is.EqualTo(MisfireInstruction.CalendarIntervalTrigger.DoNothing));
-
-        // Verify it can still calculate next fire time correctly
-        var nextFire = trigger.GetFireTimeAfter(DateTimeOffset.UtcNow);
-        Assert.That(nextFire, Is.Not.Null);
-    }
+    #region Input validation still runs before misfire handling
 
     [TestCase(null)]
     [TestCase("")]
@@ -529,235 +143,58 @@ public class QuartzMisfireInstructionTests
     [TestCase("\t\n")]
     public void CreateTriggerBuilder_WithInvalidInput_ReturnsError(string? invalidInput)
     {
-        // Act
-        var result = _converter.CreateTriggerBuilder(invalidInput!, MisfireInstruction.CronTrigger.DoNothing);
+        var result = _converter.CreateTriggerBuilder(invalidInput!, CronTriggerMisfireInstruction.DoNothing);
 
-        // Assert - Should propagate validation error from ToQuartzSchedule
-        Assert.That(result, Is.TypeOf<ParseResult<TriggerBuilder>.Error>());
-        var error = (ParseResult<TriggerBuilder>.Error)result;
-        Assert.That(error.Message, Does.Contain("empty").IgnoreCase);
+        Assert.That(result, Is.TypeOf<ParseResult<TriggerBuilder<IJob>>.Error>());
+        Assert.That(((ParseResult<TriggerBuilder<IJob>>.Error)result).Message, Does.Contain("empty").IgnoreCase);
     }
 
     [Test]
     public void CreateTriggerBuilder_WithInputExceedingMaxLength_ReturnsError()
     {
-        // Arrange - Input exceeding 1000 character limit
-        var tooLong = new string('a', 1001);
+        var result = _converter.CreateTriggerBuilder(new string('a', 1001), CronTriggerMisfireInstruction.DoNothing);
 
-        // Act
-        var result = _converter.CreateTriggerBuilder(tooLong, MisfireInstruction.CronTrigger.DoNothing);
-
-        // Assert - Should propagate validation error from ToQuartzSchedule
-        Assert.That(result, Is.TypeOf<ParseResult<TriggerBuilder>.Error>());
-        var error = (ParseResult<TriggerBuilder>.Error)result;
-        Assert.That(error.Message, Does.Contain("maximum length").IgnoreCase);
-    }
-
-    [TestCase(-2)]
-    [TestCase(-999)]
-    [TestCase(int.MinValue)]
-    public void ToQuartzSchedule_WithInvalidNegativeMisfireValue_ReturnsError(int invalidMisfire)
-    {
-        // Arrange
-        var natural = "every day at 2pm";
-
-        // Act
-        var result = _converter.ToQuartzSchedule(natural, invalidMisfire);
-
-        // Assert - Message is now a clean, stable string; the underlying
-        // ArgumentOutOfRangeException (with the misfire value detail) is
-        // carried separately via Error.Exception.
-        Assert.That(result, Is.TypeOf<ParseResult<IScheduleBuilder>.Error>());
-        var error = (ParseResult<IScheduleBuilder>.Error)result;
-        Assert.That(error.Message, Does.Contain("Quartz schedule").IgnoreCase);
-        Assert.That(error.Exception, Is.Not.Null);
-        Assert.That(error.Exception!.Message, Does.Contain("misfire").IgnoreCase);
-        Assert.That(error.Exception!.Message, Does.Contain(invalidMisfire.ToString()));
-    }
-
-    [TestCase(int.MaxValue)]
-    [TestCase(1000)]
-    [TestCase(100)]
-    public void CreateTriggerBuilder_WithInvalidPositiveMisfireValue_ReturnsError(int invalidMisfire)
-    {
-        // Arrange
-        var natural = "every hour";
-
-        // Act
-        var result = _converter.CreateTriggerBuilder(natural, invalidMisfire);
-
-        // Assert - clean Message check; CreateTriggerBuilder also propagates
-        // the underlying ToQuartzSchedule error's Exception (see the negative
-        // misfire value test above for the equivalent assertion).
-        Assert.That(result, Is.TypeOf<ParseResult<TriggerBuilder>.Error>());
-        var error = (ParseResult<TriggerBuilder>.Error)result;
-        Assert.That(error.Message, Does.Contain("Quartz schedule").IgnoreCase);
-        Assert.That(error.Exception, Is.Not.Null);
-        Assert.That(error.Exception!.Message, Does.Contain("misfire").IgnoreCase);
-        Assert.That(error.Exception!.Message, Does.Contain(invalidMisfire.ToString()));
-    }
-
-    [Test]
-    public void ToQuartzSchedule_WithExplicitZeroMisfire_UsesSmartPolicy()
-    {
-        // Arrange
-        var natural = "every day at 10am";
-
-        // Act - Explicitly pass 0 (vs relying on default parameter)
-        var result = _converter.ToQuartzSchedule(natural, 0);
-
-        // Assert
-        Assert.That(result, Is.TypeOf<ParseResult<IScheduleBuilder>.Success>());
-        var scheduleBuilder = ((ParseResult<IScheduleBuilder>.Success)result).Value;
-
-        var trigger = TriggerBuilder.Create()
-            .WithIdentity("test")
-            .WithSchedule(scheduleBuilder)
-            .Build();
-
-        Assert.That(trigger.MisfireInstruction, Is.EqualTo(MisfireInstruction.SmartPolicy),
-            "Explicit zero value should use SmartPolicy (same as default)");
+        Assert.That(result, Is.TypeOf<ParseResult<TriggerBuilder<IJob>>.Error>());
+        Assert.That(((ParseResult<TriggerBuilder<IJob>>.Error)result).Message, Does.Contain("maximum length").IgnoreCase);
     }
 
     [Test]
     public void ToQuartzSchedule_InvalidScheduleWithValidMisfire_ReturnsParseError()
     {
-        // Arrange - Invalid schedule pattern but valid misfire value
-        var invalidSchedule = "every 999 potato chips";
-        var validMisfire = MisfireInstruction.CronTrigger.DoNothing;
+        var result = _converter.ToQuartzSchedule("every 999 potato chips", CronTriggerMisfireInstruction.DoNothing);
 
-        // Act
-        var result = _converter.ToQuartzSchedule(invalidSchedule, validMisfire);
-
-        // Assert - Should fail during schedule parsing, not misfire application
         Assert.That(result, Is.TypeOf<ParseResult<IScheduleBuilder>.Error>());
-        var error = (ParseResult<IScheduleBuilder>.Error)result;
-        // Error should be about parsing, not misfire
-        Assert.That(error.Message, Does.Not.Contain("misfire").IgnoreCase);
-    }
-
-    [Test]
-    public void CreateTriggerBuilder_WithExplicitZeroMisfire_UsesSmartPolicy()
-    {
-        // Arrange
-        var natural = "every week at 5pm";
-
-        // Act - Explicitly pass 0 (vs relying on default parameter)
-        var result = _converter.CreateTriggerBuilder(natural, 0);
-
-        // Assert
-        Assert.That(result, Is.TypeOf<ParseResult<TriggerBuilder>.Success>());
-        var trigger = ((ParseResult<TriggerBuilder>.Success)result).Value.Build();
-
-        Assert.That(trigger.MisfireInstruction, Is.EqualTo(MisfireInstruction.SmartPolicy),
-            "Explicit zero value should use SmartPolicy (same as default)");
+        Assert.That(((ParseResult<IScheduleBuilder>.Error)result).Message, Does.Not.Contain("misfire").IgnoreCase);
     }
 
     [Test]
     public void CreateTriggerBuilder_InvalidScheduleWithValidMisfire_ReturnsParseError()
     {
-        // Arrange - Invalid schedule pattern but valid misfire value
-        var invalidSchedule = "every 42 bananas at midnight";
-        var validMisfire = MisfireInstruction.IgnoreMisfirePolicy;
+        var result = _converter.CreateTriggerBuilder("every 42 bananas at midnight", CronTriggerMisfireInstruction.IgnoreMisfires);
 
-        // Act
-        var result = _converter.CreateTriggerBuilder(invalidSchedule, validMisfire);
-
-        // Assert - Should fail during schedule parsing (propagated from ToQuartzSchedule)
-        Assert.That(result, Is.TypeOf<ParseResult<TriggerBuilder>.Error>());
-        var error = (ParseResult<TriggerBuilder>.Error)result;
-        // Error should be about parsing, not misfire
-        Assert.That(error.Message, Does.Not.Contain("misfire").IgnoreCase);
+        Assert.That(result, Is.TypeOf<ParseResult<TriggerBuilder<IJob>>.Error>());
+        Assert.That(((ParseResult<TriggerBuilder<IJob>>.Error)result).Message, Does.Not.Contain("misfire").IgnoreCase);
     }
 
     #endregion
 
-    #region SimpleScheduleBuilder (one-time trigger) Misfire Tests
+    #region SimpleScheduleBuilder (one-time trigger)
 
-    [Test]
-    public void ApplyMisfireInstruction_SimpleSchedule_SmartPolicy_ReturnsUnmodifiedBuilder()
+    [TestCase(SimpleTriggerMisfireInstruction.SmartPolicy)]
+    [TestCase(SimpleTriggerMisfireInstruction.IgnoreMisfires)]
+    [TestCase(SimpleTriggerMisfireInstruction.FireNow)]
+    [TestCase(SimpleTriggerMisfireInstruction.NowWithExistingCount)]
+    [TestCase(SimpleTriggerMisfireInstruction.NowWithRemainingCount)]
+    [TestCase(SimpleTriggerMisfireInstruction.NextWithRemainingCount)]
+    [TestCase(SimpleTriggerMisfireInstruction.NextWithExistingCount)]
+    public void ApplyMisfireInstruction_SimpleSchedule_AppliesInstruction(SimpleTriggerMisfireInstruction instruction)
     {
         var builder = SimpleScheduleBuilder.Create().WithRepeatCount(0);
 
-        var result = MisfireInstructionHelper.ApplyMisfireInstruction(builder);
+        var result = MisfireInstructionHelper.ApplyMisfireInstruction(builder, instruction);
 
         var trigger = (ISimpleTrigger)TriggerBuilder.Create().WithSchedule(result).Build();
-        Assert.That(trigger.MisfireInstruction, Is.EqualTo(MisfireInstruction.SmartPolicy));
-    }
-
-    [Test]
-    public void ApplyMisfireInstruction_SimpleSchedule_IgnoreMisfires_AppliesCorrectly()
-    {
-        var builder = SimpleScheduleBuilder.Create().WithRepeatCount(0);
-
-        var result = MisfireInstructionHelper.ApplyMisfireInstruction(builder, MisfireInstruction.IgnoreMisfirePolicy);
-
-        var trigger = (ISimpleTrigger)TriggerBuilder.Create().WithSchedule(result).Build();
-        Assert.That(trigger.MisfireInstruction, Is.EqualTo(MisfireInstruction.IgnoreMisfirePolicy));
-    }
-
-    [Test]
-    public void ApplyMisfireInstruction_SimpleSchedule_FireNow_AppliesCorrectly()
-    {
-        var builder = SimpleScheduleBuilder.Create().WithRepeatCount(0);
-
-        var result = MisfireInstructionHelper.ApplyMisfireInstruction(builder, MisfireInstruction.SimpleTrigger.FireNow);
-
-        var trigger = (ISimpleTrigger)TriggerBuilder.Create().WithSchedule(result).Build();
-        Assert.That(trigger.MisfireInstruction, Is.EqualTo(MisfireInstruction.SimpleTrigger.FireNow));
-    }
-
-    [Test]
-    public void ApplyMisfireInstruction_SimpleSchedule_RescheduleNowWithExistingCount_AppliesCorrectly()
-    {
-        var builder = SimpleScheduleBuilder.Create().WithRepeatCount(0);
-
-        var result = MisfireInstructionHelper.ApplyMisfireInstruction(builder, MisfireInstruction.SimpleTrigger.RescheduleNowWithExistingRepeatCount);
-
-        var trigger = (ISimpleTrigger)TriggerBuilder.Create().WithSchedule(result).Build();
-        Assert.That(trigger.MisfireInstruction, Is.EqualTo(MisfireInstruction.SimpleTrigger.RescheduleNowWithExistingRepeatCount));
-    }
-
-    [Test]
-    public void ApplyMisfireInstruction_SimpleSchedule_RescheduleNowWithRemainingCount_AppliesCorrectly()
-    {
-        var builder = SimpleScheduleBuilder.Create().WithRepeatCount(0);
-
-        var result = MisfireInstructionHelper.ApplyMisfireInstruction(builder, MisfireInstruction.SimpleTrigger.RescheduleNowWithRemainingRepeatCount);
-
-        var trigger = (ISimpleTrigger)TriggerBuilder.Create().WithSchedule(result).Build();
-        Assert.That(trigger.MisfireInstruction, Is.EqualTo(MisfireInstruction.SimpleTrigger.RescheduleNowWithRemainingRepeatCount));
-    }
-
-    [Test]
-    public void ApplyMisfireInstruction_SimpleSchedule_RescheduleNextWithRemainingCount_AppliesCorrectly()
-    {
-        var builder = SimpleScheduleBuilder.Create().WithRepeatCount(0);
-
-        var result = MisfireInstructionHelper.ApplyMisfireInstruction(builder, MisfireInstruction.SimpleTrigger.RescheduleNextWithRemainingCount);
-
-        var trigger = (ISimpleTrigger)TriggerBuilder.Create().WithSchedule(result).Build();
-        Assert.That(trigger.MisfireInstruction, Is.EqualTo(MisfireInstruction.SimpleTrigger.RescheduleNextWithRemainingCount));
-    }
-
-    [Test]
-    public void ApplyMisfireInstruction_SimpleSchedule_RescheduleNextWithExistingCount_AppliesCorrectly()
-    {
-        var builder = SimpleScheduleBuilder.Create().WithRepeatCount(0);
-
-        var result = MisfireInstructionHelper.ApplyMisfireInstruction(builder, MisfireInstruction.SimpleTrigger.RescheduleNextWithExistingCount);
-
-        var trigger = (ISimpleTrigger)TriggerBuilder.Create().WithSchedule(result).Build();
-        Assert.That(trigger.MisfireInstruction, Is.EqualTo(MisfireInstruction.SimpleTrigger.RescheduleNextWithExistingCount));
-    }
-
-    [Test]
-    public void ApplyMisfireInstruction_SimpleSchedule_UnknownValue_ThrowsArgumentOutOfRangeException()
-    {
-        var builder = SimpleScheduleBuilder.Create().WithRepeatCount(0);
-
-        Assert.Throws<ArgumentOutOfRangeException>(() =>
-            MisfireInstructionHelper.ApplyMisfireInstruction(builder, 999));
+        Assert.That(trigger.MisfireInstruction, Is.EqualTo(instruction));
     }
 
     #endregion

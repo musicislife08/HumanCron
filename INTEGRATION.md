@@ -696,15 +696,41 @@ ParseResult<string> IHumanCronConverter.ToCron(string naturalLanguage, ScheduleP
 ParseResult<string> INCrontabConverter.ToNCrontab(string naturalLanguage, ScheduleParserOptions options);
 
 ParseResult<IScheduleBuilder> IQuartzScheduleConverter.ToQuartzSchedule(
-    string naturalLanguage, ScheduleParserOptions options, int misfireInstruction = 0);
+    string naturalLanguage, ScheduleParserOptions options,
+    CronTriggerMisfireInstruction misfireInstruction = CronTriggerMisfireInstruction.SmartPolicy);
 
-ParseResult<TriggerBuilder> IQuartzScheduleConverter.CreateTriggerBuilder(
-    string naturalLanguage, ScheduleParserOptions options, int misfireInstruction = 0);
+ParseResult<TriggerBuilder<IJob>> IQuartzScheduleConverter.CreateTriggerBuilder(
+    string naturalLanguage, ScheduleParserOptions options,
+    CronTriggerMisfireInstruction misfireInstruction = CronTriggerMisfireInstruction.SmartPolicy);
 ```
 
 Unlike the `DateTimeZone?` overloads, `options.TimeZone` is used exactly as given (default = system timezone) -
 there is no per-converter local-timezone fallback once you pass this object yourself, matching System.Text.Json's
 `JsonSerializerOptions`. Reuse a shared instance across calls rather than constructing one per request.
+
+#### Quartz misfire instructions
+
+HumanCron.Quartz 0.9+ targets Quartz.NET 4.x, whose misfire vocabulary is the per-family enums
+(`CronTriggerMisfireInstruction`, `CalendarIntervalTriggerMisfireInstruction`,
+`SimpleTriggerMisfireInstruction`). A natural-language phrase may produce either a cron trigger or a
+calendar-interval trigger, and you cannot tell which in advance, so the recurring methods take
+`CronTriggerMisfireInstruction` and apply it to whichever family results. The two families share
+the same four members with identical values, so nothing is lost in the mapping. One-time triggers
+(`CreateOneTimeTriggerBuilder`) always build a simple trigger and take `SimpleTriggerMisfireInstruction`.
+
+Quartz 3 consumers should stay on HumanCron.Quartz 0.8.0 (and therefore HumanCron 0.8.0).
+
+HumanCron 0.8 (Quartz 3) had no native "every N weeks" calendar interval, so it persisted multi-week
+schedules internally as a day-unit calendar-interval trigger whose `RepeatInterval` was a multiple of
+7 - a workaround for a Quartz 3 bug where week intervals ignored `StartAt`. Quartz 4 fixes that bug, so
+HumanCron 0.9 now builds and expects real week-unit triggers, and the parser's day-multiple-of-7 reverse
+mapping was removed. One consequence: if you have triggers that were built and persisted by HumanCron
+0.8 (e.g. sitting in a live Quartz `IJobStore`), calling `IQuartzScheduleConverter.ToNaturalLanguage(...)`
+on one of those old triggers after upgrading no longer reconstructs `"2w"`-style natural language - it
+now returns `ParseResult<string>.Error("Unsupported calendar interval unit: Day")`. New schedules created
+by 0.9 are unaffected, since they persist as real week intervals; only pre-existing 0.8-era persisted
+triggers hit this. If you need natural language back for one of those, re-create the trigger from its
+original natural-language source rather than relying on the reverse conversion.
 
 #### Rejecting Schedules That Fire Too Often (MinInterval)
 
@@ -758,7 +784,7 @@ using HumanCron.Quartz;
 
 var converter = QuartzScheduleConverterFactory.Create();
 var result = converter.CreateOneTimeTriggerBuilder("2 hours");
-if (result is ParseResult<TriggerBuilder>.Success success)
+if (result is ParseResult<TriggerBuilder<IJob>>.Success success)
 {
     var trigger = success.Value
         .WithIdentity("unfreezeTrigger", "myGroup")
